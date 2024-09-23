@@ -1,7 +1,7 @@
 {
   "name": "juphjacs",
   "version": "1.0.0",
-  "description": "A simple web site framework. Just use plain html, javascript and css; stupid.",
+  "description": "A simple web site builder. Just use plain html, javascript and css; stupid.",
   "main": "server.mjs",
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
   },
   "keywords": [
     "web",
-    "framework",
+    "builder",
     "simple",
     "just",
     "html",
