@@ -1,0 +1,39 @@
+<meta name="layout" content="./public/layout.html" />
+<style>
+    main {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 0 3em;
+    }
+    h1 {
+        text-align: center;
+    }
+
+    @media (min-width: 1024px) {
+        main {
+            flex-direction: row;
+        }
+    }
+
+</style>
+
+<h1>${title}</h1>
+<p>Create websites with near-real-time feedback with your code to the left (or right) and a browser to the right (or left).</p>
+<ol>
+    ${things.map(thing => `<li>${thing}</li>`).join('')}
+</ol>
+<script type="module">
+</script>
+<script server>
+    const title = 'Hot <s>Tea</s> <s>Page</s> DOM Reloading Machinations'
+    const things = []
+    for (let i = 0; i < 100; i++) {
+        things.push(i)
+    }
+    export default {
+        title,
+        things
+    }
+</script>

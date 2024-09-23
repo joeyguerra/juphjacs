@@ -1,0 +1,27 @@
+{
+  "name": "juphjacs",
+  "version": "1.0.0",
+  "description": "A simple web site framework. Just use plain html, javascript and css; stupid.",
+  "main": "server.mjs",
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=.env --experimental-vm-modules --watch server.mjs",
+    "test": "node --test --experimental-vm-modules"
+  },
+  "keywords": [
+    "web",
+    "framework",
+    "simple",
+    "just",
+    "html",
+    "javascript",
+    "css"
+  ],
+  "author": "Joey Guerra",
+  "license": "MIT",
+  "dependencies": {
+    "debug": "^4.3.7",
+    "morphdom": "^2.7.4",
+    "socket.io": "^4.8.0"
+  }
+}

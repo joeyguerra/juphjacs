@@ -1,0 +1,16 @@
+<h1>Server Side Executed Script</h1>
+<p>${message}</p>
+<p>${newMessage}</p>
+<p>${name}</p>
+<script server>
+    const message = 'This message was generated on the server side.'
+    export {
+        message
+    }
+</script>
+<script server>
+    const newMessage = 'this is a new message'
+    export {
+        newMessage
+    }
+</script>

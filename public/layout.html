@@ -1,0 +1,77 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${title}</title>
+    <style>
+        :root {
+            --primary-color-light: #ffffff;
+            --secondary-color-light: #000000;
+            --primary-color-dark: #000000;
+            --secondary-color-dark: #ffffff;
+            --primary-font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        @media (prefers-color-scheme: light) {
+            :root {
+                --primary-color: var(--primary-color-light);
+                --secondary-color: var(--secondary-color-light);
+            }
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --primary-color: var(--primary-color-dark);
+                --secondary-color: var(--secondary-color-dark);
+            }
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            font-size: 21px;
+            line-height: 1.5;
+            color: var(--secondary-color);
+            background-color: var(--primary-color);
+            font-family: var(--primary-font-family);
+        }
+        header {
+            background-color: var(--primary-color);
+            color: var(--secondary-color);
+            padding: 1rem;
+            text-align: center;
+        }
+
+        main {
+            padding: 1rem;
+        }
+
+        footer {
+            background-color: var(--primary-color);
+            color: var(--secondary-color);
+            padding: 1rem;
+            text-align: center;
+        }        
+    </style>
+</head>
+<body class="light-mode">
+    <header>
+        <h1>Just Use Plain Html, Javascript, And CSS Stupid</h1>
+        <h2>juphjacs.io</h2>
+        <img src="/images/logo.png" alt="Logo">
+    </header>
+    <main>
+        ${body}
+    </main>
+    <footer>
+        <p>Made with 🤖🧠🍵</p>
+    </footer>
+</body>
+<script src="/socket.io/socket.io.js"></script>
+<script type="module" id="HotReloader">
+    import { HotReloader } from '/HotReloader.mjs'
+    const hotReloader = new HotReloader(window, io())
+</script>
+</html>

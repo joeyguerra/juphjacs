@@ -1,0 +1,13 @@
+<h1>${digest}</h1>
+<p>${typeof(morphdom) === 'function'}</p>
+<script server>
+    import crypto from 'node:crypto'
+    import morphdom from 'morphdom'
+    const hash = crypto.createHash('sha256')
+    hash.update('hello')
+    const digest = hash.digest('hex')
+    export {
+        digest,
+        morphdom
+    }
+</script>
