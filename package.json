@@ -15,7 +15,9 @@
     "just",
     "html",
     "javascript",
-    "css"
+    "css",
+    "hotreload",
+    "domdiffed"
   ],
   "author": "Joey Guerra",
   "license": "MIT",
