@@ -37,9 +37,19 @@ class Template {
         if (contexts.length > 0) {
             Object.assign(context, ...contexts)
         }
-        const template = new Function('context', `with (context) { return \`${escapedContent.replaceAll(SCRIPT_REGEX, '')}\` }`)
-        const renderedHtml = template(context)
-        return this.restoreScriptBackticks(renderedHtml)
+
+        // remove the scripts so that it's not ever sent to the client.
+        const output = escapedContent?.replaceAll(SCRIPT_REGEX, '')
+        
+        const template = new Function('context', `with (context) { return \`${output}\` }`)
+        let renderedHtml = output
+        try {
+            renderedHtml = template(context)
+        } catch (e) {
+            throw e
+        } finally {
+            return this.restoreScriptBackticks(renderedHtml)
+        }
     }
     async executeScriptsIn(html) {
         const scripts = []

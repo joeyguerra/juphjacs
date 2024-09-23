@@ -21,15 +21,13 @@
 
 <h1>${title}</h1>
 <p>Create websites with near-real-time feedback with your code to the left (or right) and a browser to the right (or left).</p>
-<ol>
+<ul>
     ${things.map(thing => `<li>${thing}</li>`).join('')}
-</ol>
-<script type="module">
-</script>
+</ul>
 <script server>
-    const title = 'Hot <s>Tea</s> <s>Page</s> DOM Reloading Machinations'
+    const title = 'Hot <s>Tea</s> DOM Reloading Machinations'
     const things = []
-    for (let i = 0; i < 100; i++) {
+    for (let i = 10; i >= 0; i--) {
         things.push(i)
     }
     export default {

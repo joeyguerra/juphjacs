@@ -5,11 +5,12 @@ import fs from 'node:fs'
 import EventEmitter from 'node:events'
 import vm, { SyntheticModule, SourceTextModule } from 'node:vm'
 import { Server as SocketServer } from 'socket.io'
-import debug from 'debug'
+import createDebug from 'debug'
 import pkg from './package.json' with {type: 'json'}
 import { Template, TemplateWithLayout, LAYOUT_META_REGEX } from './src/Template.mjs'
 
-debug(`${pkg.name}:server`)
+const PACKAGE_NAME = `${pkg.name}:server`
+const debug = createDebug(PACKAGE_NAME)
 
 const server = createServer()
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -60,27 +61,54 @@ server.on('request', async (req, res) => {
     res.setHeader('Content-Type', CONTENT_TYPE[ext] ?? 'application/octet-stream')
     if (ext === 'html') {
         const filePath = join(PUBLIC, uri)
-        const html = await renderTemplate(filePath)
+        const html = await renderTemplate(filePath, layouts)
         res.end(html)
     } else {
         fs.createReadStream(join(PUBLIC, uri)).pipe(res)
     }
 })
 
-async function renderTemplate(filePath) {
+async function renderTemplate(filePath, layouts) {
     let content = await fs.promises.readFile(filePath, 'utf-8')
     const layoutMatch = content.match(LAYOUT_META_REGEX)
     const layoutPath = layoutMatch ? join(__dirname, layoutMatch.groups.fileName) : null
     let template = new Template(content)
     if (layoutPath) {
+        let key = layouts.get(layoutPath)
+        if (!key) {
+            layouts.set(layoutPath, new Set())
+            key = layouts.get(layoutPath)
+        }
+        key.add(filePath)
         const layoutContent = await fs.promises.readFile(layoutPath, 'utf-8')
         template = new TemplateWithLayout(content, layoutContent)
     }
-    return template.render()
+    return await template.render()
 }
 
-async function broadcast(filePath, stats) {
-    const data = await renderTemplate(filePath)
+async function loadLayouts(dir) {
+    const layouts = new Map()
+    for await (const file of dir) {
+        if (file.isDirectory()) {
+            loadLayouts(await fs.promises.opendir(join(dir.path, file.name), { recursive: true}))
+        } else {
+            if (extname(file.name) !== '.html') continue
+            const content = await fs.promises.readFile(resolve(dir.path, file.name), 'utf-8')
+            const layoutMatch = content.match(LAYOUT_META_REGEX)
+            if (!layoutMatch) continue
+            const key = layouts.get(layoutMatch.groups.fileName)
+            if (key) {
+                key.add(resolve(__dirname, file.name))
+            } else {
+                layouts.set(resolve(__dirname, layoutMatch.groups.fileName), new Set([resolve(dir.path, file.name)]))
+            }
+        }
+    }
+    return layouts
+}
+
+async function broadcast(filePath, stats, layouts) {
+    const data = await renderTemplate(filePath, layouts)
     const relativePath = relative(PUBLIC, filePath)
     for (const [socketId, url] of clients.entries()) {
         if (url.includes(relativePath)) {
@@ -90,9 +118,10 @@ async function broadcast(filePath, stats) {
 }
 
 class ChokidarWannabee extends EventEmitter {
-    constructor(folder) {
+    constructor(folder, layouts) {
         super()
         this.folder = folder
+        this.layouts = layouts
         this.debounceTimers = new Map()
     }
     mapEvent(event) {
@@ -114,6 +143,13 @@ class ChokidarWannabee extends EventEmitter {
         if (this.debounceTimers.has(debounceKey)) {
             clearTimeout(this.debounceTimers.get(debounceKey))
         }
+        let key = this.layouts.get(absolutePath)
+        if (key) {
+            for await (const filePath of key) {
+                await this.fire(dirname(filePath), event, filePath)
+            }
+            return
+        }
         this.debounceTimers.set(debounceKey, setTimeout(async () => {
             try {
                 const stats = await fs.promises.stat(absolutePath)
@@ -130,13 +166,14 @@ class ChokidarWannabee extends EventEmitter {
     }
 }
 
-const chokidar = new ChokidarWannabee(PUBLIC)
+const layouts = await loadLayouts(await fs.promises.opendir(PUBLIC, { recursive: true}))
+const chokidar = new ChokidarWannabee(PUBLIC, layouts)
 Array('add', 'change').forEach(event => {
     chokidar.watch(PUBLIC).on(event, async (filePath, stats) => {
-        await broadcast(filePath, stats)
+        await broadcast(filePath, stats, chokidar.layouts)
     })
 })
 
 server.listen(process.env.PORT ?? 3000, async () => {
-    debug.log(`Server running at http://localhost:${server.address().port}/`)
+    createDebug.log(`Server running at http://localhost:${server.address().port}/`)
 })
