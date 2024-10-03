@@ -1,4 +1,8 @@
-<meta name="layout" content="./tests/html/layout.html" />
 <h1>Test Page</h1>
 <p>This is a testing template page where a layout file can be defined.</p>
 <p>The expectation is that this content will get rendered in a \$\{body\} declaration in the layout file.</p>
+<script server>
+    export default {
+        layout: './tests/html/layout.html'
+    }
+</script>

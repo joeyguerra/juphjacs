@@ -1,4 +1,3 @@
-<meta name="layout" content="./public/layout.html" />
 <style>
     main {
         display: flex;
@@ -18,20 +17,36 @@
     }
 
 </style>
-
 <h1>${title}</h1>
 <p>Create websites with near-real-time feedback with your code to the left (or right) and a browser to the right (or left).</p>
-<ul>
+<ul id="list">
     ${things.map(thing => `<li>${thing}</li>`).join('')}
 </ul>
+<form action="/index.html" onsubmit="postForm(event)" method="post">
+    <input type="text" name="thing" id="thing" placeholder="Add a thing" required>
+    <button type="submit">Add</button>
+</form>
+<script>
+    (function() {
+        window.postForm = async e => {
+            e.preventDefault()
+            const data = new FormData(e.target)
+            window.list.insertAdjacentHTML('afterbegin', `<li>${data.get('thing')}</li>`)
+            e.target.reset()
+        }
+    })()
+</script>
 <script server>
     const title = 'Hot <s>Tea</s> DOM Reloading Machinations'
     const things = []
     for (let i = 10; i >= 0; i--) {
         things.push(i)
     }
+
     export default {
         title,
-        things
+        things,
+        layout: './public/layout.html',
+        route: '/index'
     }
 </script>

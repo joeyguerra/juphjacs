@@ -1,4 +1,4 @@
-import { createServer } from 'node:http'
+import { createServer, IncomingMessage } from 'node:http'
 import { fileURLToPath } from 'node:url'
 import { dirname, extname, join, relative, resolve } from 'node:path'
 import fs from 'node:fs'
@@ -7,7 +7,7 @@ import vm, { SyntheticModule, SourceTextModule } from 'node:vm'
 import { Server as SocketServer } from 'socket.io'
 import createDebug from 'debug'
 import pkg from './package.json' with {type: 'json'}
-import { Template, TemplateWithLayout, LAYOUT_META_REGEX } from './src/Template.mjs'
+import { Template } from './src/Template.mjs'
 
 const PACKAGE_NAME = `${pkg.name}:server`
 const debug = createDebug(PACKAGE_NAME)
@@ -27,12 +27,20 @@ const CONTENT_TYPE = {
     svg: 'image/svg+xml',
     mjs: 'text/javascript'
 }
-
-io.on('connection', socket => {
+const hotReloadNamespace = io.of('/hot-reload')
+hotReloadNamespace.on('connection', socket => {
     debug('connected %s', socket.id)
-    socket.on('url', url => {
-        clients.set(socket.id, url)
-    })
+    const url = new URL(socket.handshake.headers.referer)
+    if (url.pathname === '/') {
+        url.pathname = '/index.html'
+    }
+    const req = new IncomingMessage(socket)
+    req.method = 'GET'
+    req.url = url.pathname
+    req.urlParsed = url
+    req.headers = socket.handshake.headers
+    clients.set(socket.id, {url, req, res: null})
+
     socket.on('disconnect', () => {
         clients.delete(socket.id)
         debug('user disconnected %s', socket.id)
@@ -43,47 +51,47 @@ io.on('connection', socket => {
 })
 
 server.on('request', async (req, res) => {
-    const uri = req.url === '/' ? 'index.html' : req.url
-    if (uri.indexOf('socket.io') > -1) return
-    if (uri.indexOf('morphdom-esm.js') > -1) {
+    const url = new URL(req.url, `http://${req.headers.host}`)
+    if (url.pathname === '/') {
+        url.pathname = '/index.html'
+    }
+    if (url.pathname.indexOf('socket.io') > -1) return
+    if (url.pathname.indexOf('morphdom-esm.js') > -1) {
         res.setHeader('Content-Type', 'text/javascript')
         fs.createReadStream(join(__dirname, 'node_modules/morphdom/dist/morphdom-esm.js')).pipe(res)
         return
     }
     try {
-        await fs.promises.access(join(PUBLIC, uri), fs.constants.F_OK)
+        await fs.promises.access(join(PUBLIC, url.pathname), fs.constants.F_OK)
     } catch (e) {
         res.statusCode = 404
         res.end()
         return
     }
-    const ext = extname(uri).substring(1)
+    const ext = extname(url.pathname).substring(1)
     res.setHeader('Content-Type', CONTENT_TYPE[ext] ?? 'application/octet-stream')
     if (ext === 'html') {
-        const filePath = join(PUBLIC, uri)
-        const html = await renderTemplate(filePath, layouts)
+        const filePath = join(PUBLIC, url.pathname)
+        const html = await renderTemplate(filePath, layouts, {req, res})
         res.end(html)
     } else {
-        fs.createReadStream(join(PUBLIC, uri)).pipe(res)
+        fs.createReadStream(join(PUBLIC, url.pathname)).pipe(res)
     }
 })
 
-async function renderTemplate(filePath, layouts) {
+async function renderTemplate(filePath, layouts, initialContext = {}) {
     let content = await fs.promises.readFile(filePath, 'utf-8')
-    const layoutMatch = content.match(LAYOUT_META_REGEX)
-    const layoutPath = layoutMatch ? join(__dirname, layoutMatch.groups.fileName) : null
-    let template = new Template(content)
-    if (layoutPath) {
-        let key = layouts.get(layoutPath)
+    let template = new Template(fs.promises.readFile)
+    const output = await template.render(content, initialContext)
+    if (template.context.layout) {
+        let key = layouts.get(template.context.layout)
         if (!key) {
-            layouts.set(layoutPath, new Set())
-            key = layouts.get(layoutPath)
+            layouts.set(template.context.layout, new Set())
+            key = layouts.get(template.context.layout)
         }
         key.add(filePath)
-        const layoutContent = await fs.promises.readFile(layoutPath, 'utf-8')
-        template = new TemplateWithLayout(content, layoutContent)
     }
-    return await template.render()
+    return output
 }
 
 async function loadLayouts(dir) {
@@ -94,7 +102,7 @@ async function loadLayouts(dir) {
         } else {
             if (extname(file.name) !== '.html') continue
             const content = await fs.promises.readFile(resolve(dir.path, file.name), 'utf-8')
-            const layoutMatch = content.match(LAYOUT_META_REGEX)
+            const layoutMatch = content.match(/layout:\s?['"](?<fileName>.*)['"]/)
             if (!layoutMatch) continue
             const key = layouts.get(layoutMatch.groups.fileName)
             if (key) {
@@ -108,11 +116,11 @@ async function loadLayouts(dir) {
 }
 
 async function broadcast(filePath, stats, layouts) {
-    const data = await renderTemplate(filePath, layouts)
     const relativePath = relative(PUBLIC, filePath)
-    for (const [socketId, url] of clients.entries()) {
-        if (url.includes(relativePath)) {
-            io.to(socketId).emit('file changed', { fileName: relativePath, data })
+    for (const [socketId, context] of clients.entries()) {
+        if (context.url.pathname.includes(relativePath)) {
+            const data = await renderTemplate(filePath, layouts, {req: context.req, res: context.res})
+            hotReloadNamespace.to(socketId).emit('file changed', { fileName: relativePath, data })
         }
     }
 }

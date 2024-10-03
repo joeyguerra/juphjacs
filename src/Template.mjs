@@ -1,57 +1,54 @@
 import vm, { SyntheticModule, SourceTextModule } from 'node:vm'
 import { resolve, dirname } from 'node:path'
 
-const LAYOUT_META_REGEX = /<meta name="layout" content="(?<fileName>.+)" \/>\n?/
+const META_REGEX = /<meta name="(?<name>.*)" content="(?<content>.+)" \/>\n?/g
 const LAYOUT_BODY_REGEX = /\n?(?<indention>\s*)(?<body>\$\{\s?body\s?\})/i
 const SCRIPT_REGEX = /<script server>(?<script>[\s\S]*?)<\/script>\n?/gi
 
-class TemplateWithLayout {
-    constructor(content, layout) {
-        this.content = content
-        this.layout = layout
-    }
-    async render(context = {}) {
-        const content = await this.mergeWithLayout(this.content, this.layout)
-        this.template = new Template(content)
-        return this.template.render(context)
-    }
-    async mergeWithLayout(html, layout) {
-        let content = html.toString()
-        const bodyMatch = LAYOUT_BODY_REGEX.exec(layout)
-        const layoutMatch = LAYOUT_META_REGEX.exec(content)
-        content = content.replace(layoutMatch[0], '')
-        return layout.replace(
-            bodyMatch.groups.body,
-            content.split('\n').map((line, i) => i > 0 ? bodyMatch.groups.indention + line : line).join('\n')
-        )
-    }
-}
 class Template {
-    constructor(content) {
-        this.content = content
+    constructor(readFile) {
+        this.readFile = readFile
+        this.context = {}
     }
-    async render(initialContext = {}) {
-        const escapedContent = this.escapeScriptBackticks(this.content)
-        const contexts = await this.executeScriptsIn(escapedContent)
-        const context = Object.assign({}, initialContext)
+    async render(content, initialContext = {}) {
+        const escapedContent = this.escapeScriptBackticks(content)
+        const contexts = await this.executeScriptsIn(escapedContent, initialContext)
+        this.context = Object.assign({}, initialContext)
         if (contexts.length > 0) {
-            Object.assign(context, ...contexts)
+            this.context = Object.assign(this.context, ...contexts)
         }
 
         // remove the scripts so that it's not ever sent to the client.
-        const output = escapedContent?.replaceAll(SCRIPT_REGEX, '')
-        
-        const template = new Function('context', `with (context) { return \`${output}\` }`)
-        let renderedHtml = output
+        let body = escapedContent?.replaceAll(SCRIPT_REGEX, '')
         try {
-            renderedHtml = template(context)
+            const template = new Function('context', `with (context) { return \`${body}\` }`)
+            body = template(this.context)
         } catch (e) {
             throw e
         } finally {
-            return this.restoreScriptBackticks(renderedHtml)
+            body = this.restoreScriptBackticks(body)
         }
+        if (this.context.layout) {
+            const layoutHtml = await this.readFile(this.context.layout, 'utf-8')
+            const layoutContext = Object.assign({}, this.context)
+            delete layoutContext.layout
+            body = this.render(layoutHtml, { body, ...layoutContext })
+        }
+        return body
     }
-    async executeScriptsIn(html) {
+    parseMetadata(html) {
+        const meta = {}
+        let match
+        while ((match = META_REGEX.exec(html)) !== null) {
+            meta[match.groups.name] = match.groups.content
+        }
+        return meta
+    }
+    async mergeWithLayout(html, layout, context) {
+        let content = html.toString()
+
+    }
+    async executeScriptsIn(html, initialContext = {}) {
         const scripts = []
         let match
         while ((match = SCRIPT_REGEX.exec(html)) !== null) {
@@ -60,15 +57,18 @@ class Template {
         if (scripts.length === 0) return []
         const contexts = []
         let context = vm.createContext({
-            context: {},
+            context: initialContext,
             console
         })
         for (let script of scripts) {
             script = script.replace(/\\`/g, '`')
             try {
                 const module = await this.compileScript(script, context)
-                Object.assign(context.context, module.namespace)
-                Object.assign(context.context, module.namespace.default)
+                if (module.namespace.default) {
+                    Object.assign(context.context, module.namespace.default)
+                } else {
+                    Object.assign(context.context, module.namespace)
+                }
                 contexts.push(context.context)
             } catch (e) {
                 console.error('compiling error', e)
@@ -125,20 +125,18 @@ class Template {
     }
     escapeScriptBackticks(html) {
         return html.replace(/<script([\s\S]*?)<\/script>/gi, (match) => {
-            return match.replace(/`/g, '\\`')
+            return match.replace(/`/g, '\\`').replace(/\$\{/g, '\\${')
         })
     }
     restoreScriptBackticks(html) {
         return html.replace(/<script([\s\S]*?)<\/script>/gi, (match) => {
-            return match.replace(/\\`/g, '`')
+            return match.replace(/\\`/g, '`').replace(/\\\$\\\{/g, '${')
         })
     }
 }
 
 export {
     Template,
-    TemplateWithLayout,
-    LAYOUT_META_REGEX,
     LAYOUT_BODY_REGEX,
     SCRIPT_REGEX
 }

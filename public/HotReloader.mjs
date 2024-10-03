@@ -25,10 +25,6 @@ class HotReloader {
     constructor(window, socket) {
         this.window = window
         this.socket = socket
-        socket.on('connect', () => {
-            const pathName = window.location.pathname == '/' ? '/index.html' : window.location.pathname
-            socket.emit('url', pathName)
-        })
         socket.on('file changed', msg => {
             const domFromData = new DOMParser().parseFromString(msg.data, 'text/html')
             morphdom(document.head, domFromData.head, morphdomOptions)

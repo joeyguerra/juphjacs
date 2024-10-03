@@ -59,18 +59,21 @@
     <header>
         <h1>Just Use Plain Html, Javascript, And CSS Stupid</h1>
         <h2>juphjacs.io</h2>
-        <img src="/images/logo.png" alt="Logo">
+        <figure>
+            <img src="/images/logo.png" alt="Logo">
+            <figcaption>This is Hubot</figcaption>
+        </figure>
     </header>
     <main>
         ${body}
     </main>
     <footer>
-        <p>Made with 🤖🧠🍵</p>
+        <p>Made with 🤖🧠</p>
     </footer>
 </body>
 <script src="/socket.io/socket.io.js"></script>
 <script type="module" id="HotReloader">
     import { HotReloader } from '/HotReloader.mjs'
-    const hotReloader = new HotReloader(window, io())
+    const hotReloader = new HotReloader(window, io('/hot-reload'))
 </script>
 </html>
