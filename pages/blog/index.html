@@ -1,0 +1,16 @@
+
+<h1>The Index</h1>
+${context.posts.map(post => `
+    <article>
+        <h2>${post.title}</h2>
+        <p>${post.excerpt}</p>
+        <a href="${post.link}">Read More</a>
+    </article>
+`).join('')}
+<script server>
+    export default {
+        route: new RegExp('^/blog/?$'),
+        layout: 'pages/blog/layout.html',
+        title: 'The Blog'
+    }
+</script>

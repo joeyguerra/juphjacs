@@ -23,6 +23,7 @@
   "license": "MIT",
   "dependencies": {
     "debug": "^4.3.7",
+    "markdown-it": "^14.1.0",
     "morphdom": "^2.7.4",
     "socket.io": "^4.8.0"
   }

@@ -10,14 +10,13 @@ class Template {
         this.readFile = readFile
         this.context = {}
     }
-    async render(content, initialContext = {}) {
+    async render(content, initialContext = {}, isLayout = false) {
         const escapedContent = this.escapeScriptBackticks(content)
         const contexts = await this.executeScriptsIn(escapedContent, initialContext)
         this.context = Object.assign({}, initialContext)
         if (contexts.length > 0) {
             this.context = Object.assign(this.context, ...contexts)
         }
-
         // remove the scripts so that it's not ever sent to the client.
         let body = escapedContent?.replaceAll(SCRIPT_REGEX, '')
         try {
@@ -28,11 +27,11 @@ class Template {
         } finally {
             body = this.restoreScriptBackticks(body)
         }
-        if (this.context.layout) {
+        if (!isLayout && this.context.layout) {
+            this.context.layout = resolve(this.context.layout)
             const layoutHtml = await this.readFile(this.context.layout, 'utf-8')
             const layoutContext = Object.assign({}, this.context)
-            delete layoutContext.layout
-            body = this.render(layoutHtml, { body, ...layoutContext })
+            body = this.render(layoutHtml, { body, ...layoutContext }, true)
         }
         return body
     }

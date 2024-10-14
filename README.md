@@ -45,3 +45,83 @@ DEBUG=hot-reloading:server node --run start
 # License
 
 [MIT](https://opensource.org/license/MIT)
+
+# App Design
+
+## Be Fast
+
+A request loads a static HTML page. Which means we have to generate static HTML files and put them in a folder where they can be piped to the response.
+
+## Short Developer Feedback Loop
+
+When a file is modified, the static site generation kicks in and generates the mapped static file.
+
+The generated output is then sent to the browser a user is on that page, for DOM diffing.
+
+## Code Locality
+
+HTML, CSS, client side and server side javascript in a single file. The templating engine allows you to write server side code in a `script` tag with a `server` attribute.
+
+```html
+<script server>
+      console.log('this will log on the server console', context.req, context.res)
+      export default {
+            title: 'Set a property that can be referenced in the HTML (and the Layout HTML page via {title}')
+      }
+</script>
+```
+
+The `req` and `res` objects will be available in the javascript code.
+
+## Layouts
+
+Define a layout for the HTML page by including a `layout` property in the module.
+
+```html
+<script server>
+      export default {
+            layout: 'public/mainlayout.html'
+      }
+</script>
+```
+
+## Pretty URIs (URI Routing)
+
+Define the pages route by including a `route` property in the module.
+
+```html
+<script server>
+      export default {
+            route: new RegExp('/blog/(?<year>{4})/(?<slug>.*)?')
+      }
+</script>
+```
+
+# Architecture
+
+## Scenarios
+
+- Static file exists for URL
+- Static file exists for URL, but is sourced from a Markdown file
+
+### Instructions
+
+- On bootup
+ - Read all markdown files
+  - transform to HTML
+  - Compile and execute the scripts
+  - Run through templating engine
+  - Write output to _site
+ - Read all the pages
+  - Compile and execute the scripts
+  - Run through templating engine
+  - Write output to _site
+- On request
+ - if URI exists as file, pipe file to response
+ - Lookup URI in Route table and run through templating engine if there's a match
+   - Send output back in response
+   - Save HTML file to wwww
+- On socket (file has changed)
+ - Lookup URI in Route table and run through templating engine if there's a match
+  - Send output back in connection
+  - Save HTML file to www

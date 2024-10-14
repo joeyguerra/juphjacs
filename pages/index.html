@@ -1,0 +1,135 @@
+<style>
+    main {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 0 3em;
+    }
+    h1 {
+        text-align: center;
+    }
+
+    @media (min-width: 1024px) {
+        main {
+            flex-direction: row;
+        }
+    }
+
+</style>
+<h1>${title}</h1>
+<p>Create websites with near-real-time feedback with your code to the left (or right) and a browser to the right (or left).</p>
+<ul id="list">
+    ${things.map(thing => `<li>${thing}</li>`).join('')}
+</ul>
+<form action="/index.html" onsubmit="postForm(event)" method="post">
+    <input type="text" name="thing" id="thing" placeholder="Add a thing" required>
+    <button type="submit">Add</button>
+</form>
+<script>
+    (function() {
+        class UnicodeFormatter {
+            static STYLES = {
+                BOLD: 'bold',
+                ITALIC: 'italic',
+                BOLD_ITALIC: 'boldItalic',
+                MONOSPACE: 'monospace',
+                FRAKTUR: 'fraktur',
+                BOLD_FRAKTUR: 'boldFraktur',
+                SCRIPT: 'script',
+                BUBBLE: 'bubble',
+                SUPERSCRIPT: 'superscript',
+                SUBSCRIPT: 'subscript'
+            }
+            constructor() {
+                this.styles = {
+                    [UnicodeFormatter.STYLES.BOLD]: {
+                        lowercase: [...'𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘷𝘄𝘅𝘆𝘇'],
+                        uppercase: [...'𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭']
+                    },
+                    [UnicodeFormatter.STYLES.ITALIC]: {
+                        lowercase: [...'𝘢𝘣𝘤𝘥𝘦𝘧𝘨𝘩𝘪𝘫𝘬𝘭𝘮𝘯𝘰𝘱𝘲𝘳𝘴𝘵𝘶𝘷𝘸𝘹𝘺𝘻'],
+                        uppercase: [...'𝘈𝘉𝘊𝘋𝘌𝘍𝘎𝘏𝘐𝘑𝘒𝘓𝘔𝘕𝘖𝘗𝘘𝘙𝘚𝘛𝘜𝘝𝘞𝘟𝘠𝘡']
+                    },
+                    [UnicodeFormatter.STYLES.BOLD_ITALIC]: {
+                        lowercase: [...'𝒂𝒃𝒄𝒅𝒆𝒇𝒈𝒉𝒊𝒋𝒌𝒍𝒎𝒏𝒐𝒑𝒒𝒓𝒔𝒕𝒖𝒗𝒘𝒙𝒚𝒛'],
+                        uppercase: [...'𝑨𝑩𝑪𝑫𝑬𝑭𝑮𝑯𝑰𝑱𝑲𝑳𝑴𝑵𝑶𝑷𝑸𝑹𝑺𝑻𝑼𝑽𝑾𝑿𝒀𝒁']
+                    },
+                    [UnicodeFormatter.STYLES.MONOSPACE]: {
+                        lowercase: [...'𝚊𝚋𝚌𝚍𝚎𝚏𝚐𝚑𝚒𝚓𝚔𝚕𝚖𝚗𝚘𝚙𝚚𝚛𝚜𝚝𝚞𝚟𝚠𝚡𝚢𝚣'],
+                        uppercase: [...'𝙰𝙱𝙲𝙳𝙴𝙵𝙶𝙷𝙸𝙹𝙺𝙻𝙼𝙽𝙾𝙿𝚀𝚁𝚂𝚃𝚄𝚅𝚆𝚇𝚈𝚉']
+                    },
+                    [UnicodeFormatter.STYLES.FRAKTUR]: {
+                        lowercase: [...'𝔞𝔟𝔠𝔡𝔢𝔣𝔤𝔥𝔦𝔧𝔨𝔩𝔪𝔫𝔬𝔭𝔮𝔯𝔰𝔱𝔲𝔳𝔴𝔵𝔶𝔷'],
+                        uppercase: [...'𝔄𝔅ℭ𝔇𝔈𝔉𝔊𝔋𝔎𝔏𝔐𝔑𝔒𝔓𝔔ℜ𝔖𝔗𝔘𝔙𝔚𝔛𝔜ℨ']
+                    },
+                    [UnicodeFormatter.STYLES.BOLD_FRAKTUR]: {
+                        lowercase: [...'𝖆𝖇𝖈𝖉𝖊𝖋𝖌𝖍𝖎𝖏𝖐𝖑𝖒𝖓𝖔𝖕𝖖𝖗𝖘𝖙𝖚𝖛𝖜𝖝𝖞𝖟'],
+                        uppercase: [...'𝕬𝕭𝕮𝕯𝕰𝕱𝕲𝕳𝕴𝕵𝕶𝕷𝕸𝕹𝕺𝕻𝕼𝕽𝕾𝕿𝖀𝖁𝖂𝖃𝖄𝖅']
+                    },
+                    [UnicodeFormatter.STYLES.SCRIPT]: {
+                        lowercase: [...'𝓪𝓫𝓬𝓭𝓮𝓯𝓰𝓱𝓲𝓳𝓴𝓵𝓶𝓷𝓸𝓹𝓺𝓻𝓼𝓽𝓾𝓿𝔀𝔁𝔂𝔃'],
+                        uppercase: [...'𝓐𝓑𝓒𝓓𝓔𝓕𝓖𝓗𝓘𝓙𝓚𝓛𝓜𝓝𝓞𝓟𝓠𝓡𝓢𝓣𝓤𝓥𝓦𝓧𝓨𝓩']
+                    },
+                    [UnicodeFormatter.STYLES.BUBBLE]: {
+                        lowercase: [...'ⓐⓑⓒⓓⓔⓕⓖⓗⓘⓙⓚⓛⓜⓝⓞⓟⓠⓡⓢⓣⓤⓥⓦⓧⓨⓩ'],
+                        uppercase: [...'ⒶⒷⒸⒹⒺⒻⒼⒽⒾⒿⓀⓁⓂⓃⓄⓅⓆⓇⓈⓉⓊⓋⓌⓍⓎⓏ'],
+                        numbers: [...'⓪①②③④⑤⑥⑦⑧⑨']
+                    },
+                    [UnicodeFormatter.STYLES.SUPERSCRIPT]: {
+                        characters: [...'⁰¹²³⁴⁵⁶⁷⁸⁹ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖᵠʳˢᵗᵘᵛʷˣʸᶻ']
+                    },
+                    [UnicodeFormatter.STYLES.SUBSCRIPT]: {
+                        characters: [...'₀₁₂₃₄₅₆₇₈₉ₐₑₒₔₓₕₖₗₘₙₚₛₜᵤᵥ₩ₓ']
+                    }}
+                }
+
+                format(text, style) {
+                    if (!this.styles[style]) {
+                        throw new Error(`Style '${style}' is not supported`)
+                    }
+                    const styleData = this.styles[style]
+                    return [...text].map(char => {
+                        if (char >= 'a' && char <= 'z') {
+                            return styleData.lowercase ? styleData.lowercase[char.charCodeAt(0) - 'a'.charCodeAt(0)] : char
+                        } else if (char >= 'A' && char <= 'Z') {
+                            return styleData.uppercase ? styleData.uppercase[char.charCodeAt(0) - 'A'.charCodeAt(0)] : char
+                        } else if (char >= '0' && char <= '9' && style === 'bubble') {
+                            return styleData.numbers[char.charCodeAt(0) - '0'.charCodeAt(0)]
+                        } else if (char >= '0' && char <= '9' && style === 'superscript') {
+                            return styleData.characters[char.charCodeAt(0) - '0'.charCodeAt(0)]
+                        } else if (char >= '0' && char <= '9' && style === 'subscript') {
+                            return styleData.characters[char.charCodeAt(0) - '0'.charCodeAt(0)]
+                        } else {
+                            return char
+                        }
+                    }).join('');
+                }
+            }
+
+            const formatter = new UnicodeFormatter()
+            const text = "Hello World 123"
+            console.log(formatter.format(text, UnicodeFormatter.STYLES.BUBBLE));
+
+        window.postForm = async e => {
+            e.preventDefault()
+            const data = new FormData(e.target)
+            window.list.insertAdjacentHTML('afterbegin', `<li>${data.get('thing')}</li>`)
+            e.target.reset()
+        }
+    })()
+</script>
+<script server>
+    const title = 'Hot <s>Tea</s> DOM Reloading Machinations'
+    const things = []
+    for (let i = 10; i >= 0; i--) {
+        things.push(i)
+    }
+
+    export default {
+        title,
+        things,
+        layout: 'pages/layout.html',
+        route: new RegExp('^/index.html')
+    }
+</script>

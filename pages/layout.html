@@ -63,6 +63,10 @@
             <img src="/images/logo.png" alt="Logo">
             <figcaption>This is Hubot</figcaption>
         </figure>
+        <nav role="navigation">
+            <a href="/">Home</a>
+            <a href="/blog">Blog</a>
+        </nav>
     </header>
     <main>
         ${body}
@@ -73,7 +77,11 @@
 </body>
 <script src="/socket.io/socket.io.js"></script>
 <script type="module" id="HotReloader">
-    import { HotReloader } from '/HotReloader.mjs'
+    import { HotReloader } from '/js/HotReloader.mjs'
     const hotReloader = new HotReloader(window, io('/hot-reload'))
+</script>
+<script server>
+    export default {
+    }
 </script>
 </html>
