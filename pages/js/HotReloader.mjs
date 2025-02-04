@@ -32,14 +32,20 @@ class HotReloader {
             console.info('morphed', new Date())
         })
         socket.on('disconnect', reason => {
-            console.error('Disconnected:', reason)
+            console.info('Disconnected:', reason)
         })
         socket.on('connect_error', error => {
             console.error('Connection error:', error)
         })
         window.addEventListener('unload', e =>{
-            socket.close()
-        })    
+            this.socket = null
+        })
+        window.addEventListener('beforeunload', () => {
+            if (this.socket.connected) {
+                this.socket.close()
+                this.socket.disconnect(true)
+            }
+        })
     }
 }
 export { HotReloader }

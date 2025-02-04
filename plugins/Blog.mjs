@@ -1,14 +1,17 @@
 
 import { EVENTS } from '../server.mjs'
-import { Template } from '../src/Template.mjs'
 
 class Post {
-    constructor(title, date, excerpt, slug, link) {
+    constructor(title, date, excerpt, slug, link, published, tags, image, shouldPublish) {
         this.title = title
         this.date = date
         this.excerpt = excerpt
         this.slug = slug
         this.link = link
+        this.published = published
+        this.tags = tags
+        this.image = image
+        this.shouldPublish = shouldPublish
     }
 }
 
@@ -29,15 +32,16 @@ export default async () => {
             const match = regex.exec(filePath)
             const { year, slug } = match.groups
             const link = `/blog/${year}/${slug}.html`
-            const post = new Post(context.title, new Date(year), context.excerpt, slug, link)
-            posts.add(post)
-            blogIndex.context.posts.push(post)
+            const post = new Post(context.title, new Date(year), context.excerpt,
+                slug, link, context.published, context.tags, context.image, context.shouldPublish)
+            if (post.shouldPublish === true) {
+                posts.add(post)
+            }
         }
     })
 
     process.on(EVENTS.PRE_TEMPLATE_RENDER, async (filePath, initialContext, content) => {
         if (filePath.includes('/blog/index.html')) {
-            initialContext.posts = blogIndex.context.posts
             initialContext.postsSet = posts
         }
     })

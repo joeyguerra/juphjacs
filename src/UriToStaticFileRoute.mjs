@@ -1,8 +1,7 @@
 class UriToStaticFileRoute {
-    constructor(regex, filePath, renderTemplate) {
-        this.regex = regex
+    constructor(regex, filePath) {
+        this.regex = regex && regex.test ? regex : new RegExp(regex)
         this.filePath = filePath
-        this.renderTemplate = renderTemplate
     }
     match(uri) {
         return this.regex.test(uri)

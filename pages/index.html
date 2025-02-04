@@ -12,7 +12,7 @@
 
     @media (min-width: 1024px) {
         main {
-            flex-direction: row;
+            /* flex-direction: row; */
         }
     }
 
@@ -22,6 +22,9 @@
 <ul id="list">
     ${things.map(thing => `<li>${thing}</li>`).join('')}
 </ul>
+<textarea id="textFormatting"></textarea>
+<select id="selectedStyle"></select>
+<pre id="preview"></pre>
 <form action="/index.html" onsubmit="postForm(event)" method="post">
     <input type="text" name="thing" id="thing" placeholder="Add a thing" required>
     <button type="submit">Add</button>
@@ -29,18 +32,6 @@
 <script>
     (function() {
         class UnicodeFormatter {
-            static STYLES = {
-                BOLD: 'bold',
-                ITALIC: 'italic',
-                BOLD_ITALIC: 'boldItalic',
-                MONOSPACE: 'monospace',
-                FRAKTUR: 'fraktur',
-                BOLD_FRAKTUR: 'boldFraktur',
-                SCRIPT: 'script',
-                BUBBLE: 'bubble',
-                SUPERSCRIPT: 'superscript',
-                SUBSCRIPT: 'subscript'
-            }
             constructor() {
                 this.styles = {
                     [UnicodeFormatter.STYLES.BOLD]: {
@@ -81,36 +72,66 @@
                     },
                     [UnicodeFormatter.STYLES.SUBSCRIPT]: {
                         characters: [...'₀₁₂₃₄₅₆₇₈₉ₐₑₒₔₓₕₖₗₘₙₚₛₜᵤᵥ₩ₓ']
-                    }}
-                }
-
-                format(text, style) {
-                    if (!this.styles[style]) {
-                        throw new Error(`Style '${style}' is not supported`)
+                    },
+                    [UnicodeFormatter.STYLES.DARK_SQUARED]: {
+                        lowercase: [...'🄰🄱🄲🄳🄴🄵🄶🄷🄸🄹🄺🄻🄼🄽🄾🄿🅀🅁🅂🅃🅄🅅🅆🅇🅈🅉'],
+                        uppercase: [...'🅰🅱🅲🅳🅴🅵🅶🅷🅸🅹🅺🅻🅼🅽🅾🅿🆀🆁🆂🆃🆄🆅🆆🆇🆈🆉']
+                    },
+                    [UnicodeFormatter.STYLES.WIDE_FONT]: {
+                        lowercase: [...'ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ'],
+                        uppercase: [...'ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ']
                     }
-                    const styleData = this.styles[style]
-                    return [...text].map(char => {
-                        if (char >= 'a' && char <= 'z') {
-                            return styleData.lowercase ? styleData.lowercase[char.charCodeAt(0) - 'a'.charCodeAt(0)] : char
-                        } else if (char >= 'A' && char <= 'Z') {
-                            return styleData.uppercase ? styleData.uppercase[char.charCodeAt(0) - 'A'.charCodeAt(0)] : char
-                        } else if (char >= '0' && char <= '9' && style === 'bubble') {
-                            return styleData.numbers[char.charCodeAt(0) - '0'.charCodeAt(0)]
-                        } else if (char >= '0' && char <= '9' && style === 'superscript') {
-                            return styleData.characters[char.charCodeAt(0) - '0'.charCodeAt(0)]
-                        } else if (char >= '0' && char <= '9' && style === 'subscript') {
-                            return styleData.characters[char.charCodeAt(0) - '0'.charCodeAt(0)]
-                        } else {
-                            return char
-                        }
-                    }).join('');
                 }
             }
+            static STYLES = {
+                BOLD: 'bold',
+                ITALIC: 'italic',
+                BOLD_ITALIC: 'boldItalic',
+                MONOSPACE: 'monospace',
+                FRAKTUR: 'fraktur',
+                BOLD_FRAKTUR: 'boldFraktur',
+                SCRIPT: 'script',
+                BUBBLE: 'bubble',
+                SUPERSCRIPT: 'superscript',
+                SUBSCRIPT: 'subscript',
+                DARK_SQUARED: 'darkSquared',
+                WIDE_FONT: 'wideFont'
+            }
 
-            const formatter = new UnicodeFormatter()
-            const text = "Hello World 123"
-            console.log(formatter.format(text, UnicodeFormatter.STYLES.BUBBLE));
+            format(text, style) {
+                if (!this.styles[style]) {
+                    throw new Error(`Style '${style}' is not supported`)
+                }
+                const styleData = this.styles[style]
+                return text.split('').map(char => {
+                    if (char === ' ') {
+                        return ' '
+                    }
+                    if (/[a-z]/.test(char)) {
+                        return styleData.lowercase[char.charCodeAt(0) - 97]
+                    }
+                    if (/[A-Z]/.test(char)) {
+                        return styleData.uppercase[char.charCodeAt(0) - 65]
+                    }
+                    if (/[0-9]/.test(char)) {
+                        return styleData.numbers[char.charCodeAt(0) - 48]
+                    }
+                    return char
+                
+                }).join('');
+            }
+        }
+        const formatter = new UnicodeFormatter()
+        window.textFormatting.addEventListener('input', e => {
+            const text = e.target.value
+            window.preview.innerHTML = formatter.format(text, UnicodeFormatter.STYLES[window.selectedStyle.value])
+        })
 
+        window.selectedStyle.addEventListener('change', e => {
+            console.log(UnicodeFormatter.STYLES[e.target.value], e.target.value)
+            window.preview.innerHTML = formatter.format(window.textFormatting.value, UnicodeFormatter.STYLES[e.target.value])
+        })
+        window.selectedStyle.innerHTML = Object.keys(UnicodeFormatter.STYLES).sort((a, b) => a === b || a > b ? 1 : -1).map(style => `<option value="${style}">${style}</option>`).join('')
         window.postForm = async e => {
             e.preventDefault()
             const data = new FormData(e.target)
@@ -118,18 +139,4 @@
             e.target.reset()
         }
     })()
-</script>
-<script server>
-    const title = 'Hot <s>Tea</s> DOM Reloading Machinations'
-    const things = []
-    for (let i = 10; i >= 0; i--) {
-        things.push(i)
-    }
-
-    export default {
-        title,
-        things,
-        layout: 'pages/layout.html',
-        route: new RegExp('^/index.html')
-    }
 </script>
