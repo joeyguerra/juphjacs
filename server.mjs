@@ -1,73 +1,18 @@
-import { createServer, IncomingMessage, ServerResponse } from 'node:http'
-import { fileURLToPath } from 'node:url'
-import { dirname, extname, join, relative, resolve } from 'node:path'
-import fs from 'node:fs'
-import { opendir, mkdir, readFile, writeFile, cp } from 'node:fs/promises'
-import EventEmitter from 'node:events'
-import { Server as SocketServer } from 'socket.io'
-import createDebug from 'debug'
+import { SiteGenerator, EVENTS } from './src/SiteGenerator.mjs'
 import pkg from './package.json' with {type: 'json'}
-import { RequestParams } from './src/RequestParams.mjs'
+import { Logger } from './src/Logger.mjs'
+import { dirname, extname, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { createServer, IncomingMessage, ServerResponse } from 'node:http'
+import { opendir, mkdir, readFile, writeFile, cp, access } from 'node:fs/promises'
+import { Server as SocketServer } from 'socket.io'
 import { ChokidarWannabee } from './src/ChokidarWannabee.mjs'
-import { Writable } from 'node:stream'
-import { UriToStaticFileRoute } from './src/UriToStaticFileRoute.mjs'
-import MarkdownIt from 'markdown-it'
-import { TemplateLiteralRenderer } from './src/TemplateLiteralRenderer.mjs'
-import { MarkdownRenderer } from './src/MarkdownRenderer.mjs'
-import { XmlRenderer } from './src/XmlRenderer.mjs'
-import { TemplateRendererFactory } from './src/TemplateRendererFactory.mjs'
-import { Page } from './src/Page.mjs'
+import { RequestParams } from './src/RequestParams.mjs'
+import { createReadStream, constants } from 'node:fs'
+
 
 const DEBUG = process.env.DEBUG
-
-class Logger extends Writable {
-    constructor(name, debug, options = {}) {
-        super({...options, objectMode: true})
-        this.name = name
-        this.debug = debug
-    }
-
-    _write(chunk, encoding, callback) {
-        process.stdout.write(chunk + '\n\n', callback)
-    }
-
-    debug (message, label) {
-        if (!this.debug) return
-        if (this.debug !== 'debug') return
-        this.log(message, label, 'debug')
-    }
-
-    info (message, label) {
-        if (!this.debug) return
-        if (this.debug !== 'info') return
-        this.log(message, label, 'info')
-    }
-
-    warn (message, label) {
-        if (!this.debug) return
-        if (this.debug !== 'warn') return
-        this.log(message, label, 'warn')
-    }
-
-    error (message, label) {
-        if (!this.debug) return
-        if (this.debug !== 'error') return
-        this.log(message, label, 'error')
-    }
-
-    log(message, label, level = 'info') {
-        if (typeof message === 'object') {
-            message = { ...message, time: new Date(), name: this.name }
-        } else {
-            message = { message, time: new Date() }
-        }
-        message = JSON.stringify(message, (key, value) => value instanceof Set ? [...value] : value)
-        this.write(`\x1b[34m${level.toUpperCase()} ${label ? `[${new Date().toISOString()}] ${label}:` : `[${new Date().toISOString()}]`}\x1b[0m ${message}`)
-    }
-}
-
 const PACKAGE_NAME = `${pkg.name}:server`
-const debug = createDebug(PACKAGE_NAME)
 const logger = new Logger(pkg.name, DEBUG)
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PAGES = join(__dirname, 'pages')
@@ -86,12 +31,10 @@ const CONTENT_TYPE = {
     webp: 'image/webp',
     xml: 'application/xml'
 }
-const EVENTS = {
-    TEMPLATE_RENDERED: 'template rendered',
-    STATIC_SITE_GENERATED: 'static site generated',
-    PRE_TEMPLATE_RENDER: 'pre template render'
-}
-
+const middlewares = new Set()
+const filesToCopyOver = Array.from(['favicon.ico', 'robots.txt'])
+const foldersToCopyOver = Array.from(['js', 'css', 'images'])
+const siteGenerator = new SiteGenerator(__dirname, PAGES, SITE_FOLDER, filesToCopyOver, foldersToCopyOver)
 
 class IncomingMessageOnSocket extends IncomingMessage {
     constructor(socket, urlParsed) {
@@ -104,7 +47,7 @@ class IncomingMessageOnSocket extends IncomingMessage {
 class IncomingMessageOnRequest extends IncomingMessage {
     constructor(req) {
         super(req)
-        this.urlParsed = new URL(req.url ?? '/', `http://${req.headers?.host ?? 'localhost'}`)
+        this.urlParsed = new URL(req?.url ?? '/', `http://${req?.headers?.host ?? 'localhost'}`)
     }
 }
 
@@ -144,168 +87,13 @@ async function * loadMiddlewares() {
     }
 }
 
-
-const filesToCopyOver = Array.from(['favicon.ico', 'robots.txt'])
-const foldersToCopyOver = Array.from(['js', 'css', 'images'])
-
-class SiteGenerator {
-    constructor() {
-        this.routes = new Set()
-        this.layouts = new Map()
-        this.localImports = new Map()
-    }
-
-    async * readAllFiles (folder) {
-        const dir = await opendir(folder);
-        for await (const dirent of dir) {
-            const entryPath = join(folder, dirent.name);
-            if (dirent.isDirectory()) {
-                yield* this.readAllFiles(entryPath)
-            } else {
-                yield entryPath
-            }
-        }
-    }
-    async copyFoldersFrom(source, destination) {
-        const dir = await opendir(source)
-        for await (let folder of dir) {
-            try {
-                await this.copyFileFrom(join(folder.parentPath, folder.name), join(destination, folder.name))
-            } catch (e) {
-                logger.error({error: e, message: 'error copying folders from'}, 'copyFoldersFrom')
-            }
-        }
-    }
-    
-    async copyFileFrom(file, destination) {
-        try {
-            await cp(file, destination, { recursive: true })
-        } catch (e) {
-            logger.error(e, 'error - copyFileFrom')
-        }
-    }
-    
-    async generateStaticSite() {
-        try{await mkdir(SITE_FOLDER)}catch(e){}
-
-        await this.copyFileFrom(join(__dirname, 'node_modules/morphdom/dist/morphdom-esm.js'), join(SITE_FOLDER, 'morphdom', 'morphdom-esm.js'))
-        
-        for await (let file of filesToCopyOver) {
-            await this.copyFileFrom(join(PAGES, file), join(SITE_FOLDER, file))
-        }
-
-        for await (let folder of foldersToCopyOver) {
-            await this.copyFoldersFrom(join(PAGES, folder), join(SITE_FOLDER, folder))
-        }
-
-        for await (const file of this.readAllFiles(PAGES)) {
-            let ext = extname(file)
-            await this.genFile(file)
-        }
-        process.emit(EVENTS.STATIC_SITE_GENERATED, this.routes, this.layouts)
-    }
-
-    async genFile(file) {
-        // TODO: This strategy is not robust. It might need to be improved.
-        if (file.includes('layout')) return
-        let ext = extname(file)
-        if (!['.md', '.html', '.xml'].includes(ext)) return
-        let newFileName = file.replace('.md', '.html').replace(PAGES, SITE_FOLDER)
-        await mkdir(dirname(newFileName), { recursive: true })
-
-        const req = new IncomingMessage()
-        const res = new ServerResponse(req)
-        req.url = `http://localhost/${relative(SITE_FOLDER, newFileName)}`
-        req.urlParsed = new URL(req.url)
-        req.params = new RequestParams(new URL(req.url), null)
-
-        const page = await this.renderPage(file, { req, res })
-        const importRegex = /import\s+{[^}]+}\s+from\s+['"]([^'"]+\.mjs)['"]/g
-        if (page.output.includes('import') || page.output.includes('require')) {
-            let match = null
-            while ((match = importRegex.exec(page.output)) !== null) {
-                let keyName = resolve(PAGES, match[1].replace(/^\//, ''))
-                let key = this.localImports.get(keyName)
-                if (!key) {
-                    this.localImports.set(keyName, new Set())
-                    key = this.localImports.get(keyName)
-                }
-                key.add(resolve(__dirname, file))
-            }
-        }
-
-        const cssRegex = /<link[^>]+href="(?!http|https)([^"]+\.css)"[^>]*>/g
-        if (page.output.includes('<link')) {
-            let match = null
-            while ((match = cssRegex.exec(page.output)) !== null) {
-                let keyName = resolve(PAGES, 'css', match[1].replace(/^\//, ''))
-                let key = this.localImports.get(keyName)
-                if (!key) {
-                    this.localImports.set(keyName, new Set())
-                    key = this.localImports.get(keyName)
-                }
-                key.add(resolve(__dirname, file))
-            }
-        }
-
-        const scriptRegex = /<script[^>]+src="(?!http|https)([^"]+)"[^>]*><\/script>/g
-        if (page.output.includes('<script')) {    
-            let match = null
-            while ((match = scriptRegex.exec(page.output)) !== null) {    
-                let keyName = resolve(PAGES, 'js', match[1].replace(/^\//, ''))
-                let key = this.localImports.get(keyName)
-                if (!key) {
-                    this.localImports.set(keyName, new Set())
-                    key = this.localImports.get(keyName)
-                }
-                key.add(resolve(__dirname, file))
-            }
-        }
-        await writeFile(newFileName, page.output)
-        return page
-    }
-
-    async renderPage(filePath, initialContext = {}) {
-        let ext = extname(filePath)
-        const rootFolder = dirname(filePath)
-        let content = await readFile(filePath, 'utf-8')
-        const templateRendererFactory = new TemplateRendererFactory(extname, [
-            new MarkdownRenderer(resolve, readFile, new MarkdownIt({
-                html: true,
-                linkify: true,
-                typographer: true
-            })),
-            new TemplateLiteralRenderer(resolve, readFile),
-            new XmlRenderer(resolve, readFile)
-        ])
-        const page = new Page(rootFolder, filePath, content, templateRendererFactory)
-        process.emit(EVENTS.PRE_TEMPLATE_RENDER, filePath, initialContext, content)
-        const template = await page.render(initialContext)
-        if (page.route) {
-            this.routes.add(new UriToStaticFileRoute(page.route, resolve(__dirname, filePath)))
-        }
-        if (page.layout) {
-            let keyName = resolve(__dirname, page.layout)
-            let key = this.layouts.get(keyName)
-            if (!key) {
-                this.layouts.set(keyName, new Set())
-                key = this.layouts.get(keyName)
-            }
-            key.add(resolve(__dirname, filePath))
-        }
-        if (page.init ) {
-            page.init()
-        }
-        process.emit(EVENTS.TEMPLATE_RENDERED, filePath, page.context, page.output)
-        return page
-    }
-}
-
-const siteGenerator = new SiteGenerator()
-
 async function broadcast(filePath, relativePath, hotReloadNamespace, clients) {
     const ext = extname(filePath)
-    await siteGenerator.genFile(filePath)
+    const req = new IncomingMessage()
+    const res = new ServerResponse(req)
+
+    await siteGenerator.genFile(filePath, req, res)
+
     const resourcesFolders = ['js', 'css', 'images']
     if(resourcesFolders.some(folder => filePath.includes(join(PAGES, folder)))) {
         await siteGenerator.copyFileFrom(filePath, join(SITE_FOLDER, relativePath))
@@ -333,8 +121,6 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, clients) {
     }
 }
 
-const middlewares = new Set()
-
 async function main (server, execute) {
 
     try {
@@ -342,7 +128,7 @@ async function main (server, execute) {
             await plugin.default()
         }
     } catch (e) {
-        console.error(e)
+        logger.warn(e)
     }
 
     try {
@@ -350,14 +136,19 @@ async function main (server, execute) {
             middlewares.add(await middleware.default())
         }    
     } catch (e) {
-        console.error(e)
+        logger.warn(e)
     }
 
-    await siteGenerator.generateStaticSite()
+    const req = new IncomingMessageOnRequest()
+    req.url = 'http://localhost/'
+    const res = new ServerResponse(req)
+
     const io = new SocketServer(server)
+    const shortCircuitUrls = ['socket.io']
+    const honeypoturls = []
     const clients = new Map()
     const hotReloadNamespace = io.of('/hot-reload')
-
+    
     const chokidar = new ChokidarWannabee(PAGES, async (folder, event, filePath, absolutePath) => {
         let filesWithThisLayout = siteGenerator.layouts.get(absolutePath)
         if (!filesWithThisLayout) return false
@@ -421,8 +212,6 @@ async function main (server, execute) {
         })
     })
 
-    const shortCircuitUrls = ['socket.io']
-    const honeypoturls = []
     server.on('request', async (req, res) => {
         const url = new URL(req.url, `http://${req.headers.host}`)
         if (shortCircuitUrls.some(shortCircuitUrl => url.pathname.includes(shortCircuitUrl))) {
@@ -463,17 +252,19 @@ async function main (server, execute) {
             }
 
             if (ext) {
-                await fs.promises.access(join(SITE_FOLDER, url.pathname), fs.constants.F_OK)
+                await access(join(SITE_FOLDER, url.pathname), constants.F_OK)
                 res.setHeader('Content-Type', CONTENT_TYPE[ext] ?? 'application/octet-stream')
-                return fs.createReadStream(join(SITE_FOLDER, url.pathname)).pipe(res)
+                return createReadStream(join(SITE_FOLDER, url.pathname)).pipe(res)
             }
         } catch (e) {
-            logger.error(e, 'error')
+            logger.error(e.message)
         }
     
         res.statusCode = 404
-        res.end()
+        res.end('Not found')
     })
+
+    await siteGenerator.generateStaticSite(req, res)
 
     Array('add', 'change').forEach(event => {
         chokidar.watch(PAGES).on(event, async (filePath, stats) => {
@@ -483,7 +274,7 @@ async function main (server, execute) {
     })
     
     server.listen(process.env.PORT ?? 3000, () => {
-        createDebug.log(`Server running at http://localhost:${server.address().port}/`)
+        logger.info(`Server running at http://localhost:${server.address().port}/`)
     })
 }
 
