@@ -65,43 +65,41 @@ When a file is modified, the static site generation kicks in and generates the m
 
 The generated output is then sent to the browser a user is on that page, for DOM diffing.
 
-## Code Locality
+## Pages
 
-HTML, CSS, client side and server side javascript in a single file. The templating engine allows you to write server side code in a `script` tag with a `server` attribute.
+A page consists of an HTML and a `.mjs` javascript file with the same name. e.g. `index.html` && `index.mjs`, in the same folder. The Javascript file will be `import`ed and passed as the `context` object to the templating engine. The templating engine uses [Template literals](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals).
+
 
 ```html
-<script server>
-      console.log('this will log on the server console', context.req, context.res)
-      export default {
-            title: 'Set a property that can be referenced in the HTML (and the Layout HTML page via {title}')
-      }
-</script>
+<!-- index.html -->
+<h1>${title}</h1>
 ```
 
-The `req` and `res` objects will be available in the javascript code.
+```js
+// index.mjs
+export default {
+      title: 'Home Page',
+      route: /^index.html/,
+      get(request) {
+            return new Response('ok')
+      },
+      post(request) {
+            return new Response('created', 201)
+      }
+}
+```
+
+If methods named after the HTTP methods are defined in the context object, they will be executed if the route matches (`route.match(url.pathname)`) the `IncomingMessage` URL. Just as long as the `route` property has a method called `match` on it, it'll work. Doesn't have to be a RegExp. Just has to have a `match` method that returns `truthy`.
 
 ## Layouts
 
-Define a layout for the HTML page by including a `layout` property in the module.
+Define a layout for the HTML page by including a `layout` property in the module. The `layout.html` file has a to have `${body}` in it for the page to render into.
 
-```html
-<script server>
-      export default {
-            layout: 'public/mainlayout.html'
-      }
-</script>
-```
-
-## Pretty URIs (URI Routing)
-
-Define the pages route by including a `route` property in the module.
-
-```html
-<script server>
-      export default {
-            route: new RegExp('/blog/(?<year>{4})/(?<slug>.*)?')
-      }
-</script>
+```js
+// index.mjs
+export default {
+      layout: 'pages/layout.html'
+}
 ```
 
 # Architecture
@@ -116,19 +114,24 @@ Define the pages route by including a `route` property in the module.
 - On bootup
  - Read all markdown files
   - transform to HTML
-  - Compile and execute the scripts
+  - import any same named javascript files for the context
   - Run through templating engine
   - Write output to _site
  - Read all the pages
-  - Compile and execute the scripts
+  - import any same named javascript files for the context
   - Run through templating engine
   - Write output to _site
 - On request
- - if URI exists as file, pipe file to response
  - Lookup URI in Route table and run through templating engine if there's a match
+ - if no route is found and URI exists as file, pipe file to response
    - Send output back in response
-   - Save HTML file to wwww
+   - Save HTML file to _site
 - On socket (file has changed)
  - Lookup URI in Route table and run through templating engine if there's a match
   - Send output back in connection
-  - Save HTML file to www
+  - Save HTML file to _site
+ - if no route is found and file exists
+  - Render page
+  - Send output back in connection
+  - Save HTML file to _site
+- HotReload uses morphdom to diff the DOM for hot-reloading
