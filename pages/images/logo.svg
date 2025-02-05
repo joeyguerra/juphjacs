@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="30 20 340 200">
+  <!-- Frame representing a browser window -->
+  <rect x="40" y="30" width="320" height="180" rx="4" fill="#ffffff" stroke="#333333" stroke-width="2"/>
+  
+  <!-- Browser toolbar -->
+  <rect x="40" y="30" width="320" height="25" rx="4" fill="#e0e0e0" stroke="#333333" stroke-width="2"/>
+  
+  <!-- Browser buttons -->
+  <circle cx="60" cy="42.5" r="6" fill="#ff6b6b"/>
+  <circle cx="80" cy="42.5" r="6" fill="#ffd93d"/>
+  <circle cx="100" cy="42.5" r="6" fill="#6bff7c"/>
+  
+  <!-- Main text -->
+  <text x="200" y="100" font-family="monospace" font-size="16" text-anchor="middle" fill="#333333">
+    Just Use
+  </text>
+  <text x="200" y="125" font-family="monospace" font-size="16" text-anchor="middle" fill="#333333">
+    <tspan fill="#f0db4f">JavaScript</tspan> &amp;
+  </text>
+  <text x="200" y="150" font-family="monospace" font-size="16" text-anchor="middle">
+    <tspan fill="#264de4">CSS</tspan> Stupid
+  </text>
+  
+  <!-- Simple code symbols -->
+  <text x="70" y="120" font-family="monospace" font-size="24" fill="#666666">{}</text>
+  <text x="330" y="120" font-family="monospace" font-size="24" fill="#666666">&lt;/&gt;</text>
+  
+  <!-- Tagline -->
+  <text x="200" y="190" font-family="monospace" font-size="12" text-anchor="middle" fill="#666666">
+    "No framework is the best framework"
+  </text>
+</svg>
