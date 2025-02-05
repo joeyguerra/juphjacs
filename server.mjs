@@ -1,10 +1,10 @@
 import { SiteGenerator, EVENTS } from './src/SiteGenerator.mjs'
 import pkg from './package.json' with {type: 'json'}
 import { Logger } from './src/Logger.mjs'
-import { dirname, extname, join, relative, resolve } from 'node:path'
+import { dirname, extname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createServer, IncomingMessage, ServerResponse } from 'node:http'
-import { opendir, mkdir, readFile, writeFile, cp, access } from 'node:fs/promises'
+import { opendir, mkdir, access } from 'node:fs/promises'
 import { Server as SocketServer } from 'socket.io'
 import { ChokidarWannabee } from './src/ChokidarWannabee.mjs'
 import { RequestParams } from './src/RequestParams.mjs'
@@ -35,6 +35,8 @@ const middlewares = new Set()
 const filesToCopyOver = Array.from(['favicon.ico', 'robots.txt'])
 const foldersToCopyOver = Array.from(['js', 'css', 'images'])
 const siteGenerator = new SiteGenerator(__dirname, PAGES, SITE_FOLDER, filesToCopyOver, foldersToCopyOver)
+
+siteGenerator.on('error', e => logger.error(e, 'error in site generator'))
 
 class IncomingMessageOnSocket extends IncomingMessage {
     constructor(socket, urlParsed) {
@@ -122,7 +124,6 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, clients) {
 }
 
 async function main (server, execute) {
-
     try {
         for await (const plugin of loadPlugins()) {
             await plugin.default()

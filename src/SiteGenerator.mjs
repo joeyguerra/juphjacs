@@ -9,6 +9,7 @@ import { TemplateRendererFactory } from './TemplateRendererFactory.mjs'
 import { Page } from './Page.mjs'
 import { RequestParams } from './RequestParams.mjs'
 import { UriToStaticFileRoute } from './UriToStaticFileRoute.mjs'
+import EventEmitter from 'node:events'
 
 const EVENTS = {
     TEMPLATE_RENDERED: 'template rendered',
@@ -16,8 +17,9 @@ const EVENTS = {
     PRE_TEMPLATE_RENDER: 'pre template render'
 }
 
-class SiteGenerator {
+class SiteGenerator extends EventEmitter {
     constructor(rootFolder, pagesFolder, siteFolder, filesToCopyOver, foldersToCopyOver) {
+        super()
         this.routes = new Set()
         this.layouts = new Map()
         this.localImports = new Map()
@@ -45,7 +47,7 @@ class SiteGenerator {
             try {
                 await this.copyFileFrom(join(folder.parentPath, folder.name), join(destination, folder.name))
             } catch (e) {
-                logger.error({error: e, message: 'error copying folders from'}, 'copyFoldersFrom')
+                this.emit('error', e)
             }
         }
     }
@@ -54,7 +56,7 @@ class SiteGenerator {
         try {
             await cp(file, destination, { recursive: true })
         } catch (e) {
-            logger.error(e, 'error - copyFileFrom')
+            this.emit('error', e)
         }
     }
     
@@ -68,6 +70,11 @@ class SiteGenerator {
         }
 
         for await (let folder of this.foldersToCopyOver) {
+            try{
+                await mkdir(join(this.pagesFolder, folder), { recursive: true })
+            } catch (e) {
+                this.emit('warn', e)
+            }
             await this.copyFoldersFrom(join(this.pagesFolder, folder), join(this.siteFolder, folder))
         }
 
