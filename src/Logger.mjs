@@ -1,10 +1,11 @@
 import { Writable } from 'node:stream'
 
 class Logger extends Writable {
-    constructor(name, debug, options = {}) {
+    constructor(name, ringBuffer, debug, options = {}) {
         super({...options, objectMode: true})
         this.name = name
         this.debug = debug
+        this.ringBuffer = ringBuffer
     }
 
     _write(chunk, encoding, callback) {
@@ -40,6 +41,9 @@ class Logger extends Writable {
             message = { ...message, time: new Date(), name: this.name }
         } else {
             message = { message, time: new Date() }
+        }
+        if (this.ringBuffer) {
+            this.ringBuffer.push({ ...message, level, label })
         }
         const colorStart = level === 'error' ? '\x1b[31m' : level === 'warn' ? '\x1b[33m' : '\x1b[34m'
         message = JSON.stringify(message, (key, value) => value instanceof Set ? [...value] : value)

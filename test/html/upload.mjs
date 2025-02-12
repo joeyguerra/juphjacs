@@ -1,10 +1,12 @@
 export default {
     upload: {},
-    async post (request, response) {
-        const formData = await request.formData()
+    async post (req, res) {
+        const formData = await req.formData()
         const upload = formData.get('file')
-        upload.content = await upload.text()
+        const buffer = await upload.arrayBuffer();
+        upload.content = Buffer.from(buffer).toString('utf-8');
         await this.render({ upload })
-        return new Response(this.output)
+        res.setHeader('Content-Type', 'text/html')
+        res.end(this.output)
     }
 }

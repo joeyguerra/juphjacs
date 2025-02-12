@@ -1,8 +1,8 @@
 export default {
     cookie: null,
-    async get (request, response) {
+    async get (req, res) {
         let cookie = {}
-        const headerCookie = request.headers.get('Cookie')
+        const headerCookie = req.headers.Cookie
         if (headerCookie) {
             cookie = headerCookie.split(';').reduce((acc, item) => {
                 const [key, value] = item.split('=').map(part => part.trim())
@@ -11,6 +11,7 @@ export default {
             }, {})
         }
         await this.render(Object.assign({}, this.context, { cookie }))
-        return new Response(this.output)
+        res.setHeader('Content-Type', 'text/html')
+        res.end(this.output)
     }
 }

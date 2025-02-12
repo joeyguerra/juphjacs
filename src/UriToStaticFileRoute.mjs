@@ -1,5 +1,6 @@
 class UriToStaticFileRoute {
     constructor(regex, filePath) {
+        console.log(regex, filePath)
         this.regex = regex && regex.test ? regex : new RegExp(regex)
         this.filePath = filePath
     }

@@ -156,7 +156,7 @@ class SiteGenerator extends EventEmitter {
             new TemplateLiteralRenderer(resolve, readFile),
             new XmlRenderer(resolve, readFile)
         ])
-        const page = new Page(rootFolder, filePath, content, templateRendererFactory)
+        const page = new Page(rootFolder, filePath, content, templateRendererFactory, readFile)
         process.emit(EVENTS.PRE_TEMPLATE_RENDER, filePath, initialContext, content)
         const template = await page.render(initialContext)
         if (page.route) {
@@ -174,7 +174,7 @@ class SiteGenerator extends EventEmitter {
         if (page.init ) {
             page.init()
         }
-        process.emit(EVENTS.TEMPLATE_RENDERED, filePath, page.context, page.output)
+        process.emit(EVENTS.TEMPLATE_RENDERED, filePath, page)
         return page
     }
 }

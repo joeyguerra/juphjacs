@@ -3,20 +3,23 @@ export default {
     layout: './test/html/layout.html',
     route: '/route',
     param: null,
-    async get(request) {
-        const id = request.url.split('/').pop()
+    async get(req, res) {
+        const id = req.url.split('/').pop()
         await this.render(Object.assign({}, this.context, { param: id }))
-        return new Response(this.output)
+        res.setHeader('Content-Type', 'text/html')
+        res.end(this.output)
     },
-    async post(request) {
-        const formData = await request.formData()
+    async post(req, res) {
+        const formData = await req.formData()
         const param = formData.get('param')
         await this.render(Object.assign({}, this.context, { param }))
-        return new Response(this.output)
+        res.setHeader('Content-Type', 'text/html')
+        res.end(this.output)
     },
-    async put(request) {
-        const param = (await request.json()).param
+    async put(req, res) {
+        const param = (await req.json()).param
         await this.render(Object.assign({}, this.context, { param }))
-        return new Response(this.output)
+        res.setHeader('Content-Type', 'text/html')
+        res.end(this.output)
     }
 }

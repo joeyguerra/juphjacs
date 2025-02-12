@@ -14,7 +14,7 @@ const __dirname = new URL('.', import.meta.url).pathname
 async function createPage(rootFolder, filePath, renderer) {
     const content = await readFile(filePath, 'utf-8')
     const templateRendererFactory = new TemplateRendererFactory(extname, [renderer])
-    return new Page(rootFolder, filePath, content, templateRendererFactory)
+    return new Page(rootFolder, filePath, content, templateRendererFactory, readFile)
 }
 
 async function testPageRendering(t, rootFolder, filePath, renderer, expectedRoute, expectedTitle, expectedLayout, assertions) {

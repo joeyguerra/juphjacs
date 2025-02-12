@@ -9,11 +9,13 @@ import { Server as SocketServer } from 'socket.io'
 import { ChokidarWannabee } from './src/ChokidarWannabee.mjs'
 import { RequestParams } from './src/RequestParams.mjs'
 import { createReadStream, constants } from 'node:fs'
-
+import { RingBuffer } from './src/RingBuffer.mjs'
 
 const DEBUG = process.env.DEBUG
 const PACKAGE_NAME = `${pkg.name}:server`
-const logger = new Logger(pkg.name, DEBUG)
+const ringBuffer = new RingBuffer(100)
+
+const logger = new Logger(pkg.name, ringBuffer, DEBUG)
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PAGES = join(__dirname, 'pages')
 const SITE_FOLDER = '_site'
@@ -44,12 +46,74 @@ class IncomingMessageOnSocket extends IncomingMessage {
         this.urlParsed = urlParsed
         this.res = new ServerResponse(this)
     }
+    async formData() {
+    }
+
+    async json() {
+    }
+
+    async text() {
+    }
+
+    async arrayBuffer() {
+    }
+
+    async blob() {
+    }
+
+    async buffer() {
+    }
 }
 
 class IncomingMessageOnRequest extends IncomingMessage {
+    #request = null
     constructor(req) {
         super(req)
-        this.urlParsed = new URL(req?.url ?? '/', `http://${req?.headers?.host ?? 'localhost'}`)
+        this.url = this.url ?? '/'
+        this.urlParsed = new URL(this.url, `http://${req?.headers?.host ?? 'localhost'}`)
+    }
+
+    async formData() {
+        const form = new FormData()
+        const text = await this.text()
+        const params = new URLSearchParams(text)
+        for (const [key, value] of params) {
+            form.append(key, value)
+        }
+        return form
+    }
+
+    async json() {
+        return await JSON.parse(await this.text())
+    }
+
+    async text() {
+        return new Promise((resolve, reject) => {
+            let data = ''
+            this.on('data', chunk => data += chunk)
+            this.on('end', () => resolve(data))
+            this.on('error', reject)
+        })
+    }
+
+    async arrayBuffer() {
+    }
+
+    async blob() {
+
+    }
+
+    async buffer() {
+    }
+
+}
+
+class ConnectedClient {
+    constructor(socketId, broadcastOperator, connectionHeaders) {
+        this.socketId = socketId
+        this.broadcastOperator = broadcastOperator
+        this.headers = connectionHeaders
+        this.url = new URL(connectionHeaders.referer)
     }
 }
 
@@ -101,22 +165,36 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, clients) {
         await siteGenerator.copyFileFrom(filePath, join(SITE_FOLDER, relativePath))
     }
 
-    for (const [socketId, context] of clients.entries()) {
-        const route = siteGenerator.routes.values().find(route => route.match(context.url.pathname))
-        logger.info({ uri: context.url.pathname, filePath, relativePath}, 'broadcast')
-        if (context.url.pathname.replace(ext, '').includes(relativePath.replace(ext, '')) || route) {
+    for (const [socketId, socket] of clients.entries()) {
+        const url = new URL(socket.handshake.headers.referer)
+        url.pathname = ifSlashAddIndex(url.pathname)
+        const requestFromWebSocketConnection = new IncomingMessageOnSocket(socket, url)
+        requestFromWebSocketConnection.method = 'GET'
+        requestFromWebSocketConnection.url = url.pathname
+        requestFromWebSocketConnection.headers = socket.handshake.headers
+        let shouldBreak = false
+        const response = new ServerResponse(requestFromWebSocketConnection)
+        logger.info({shouldBreak, url, filePath, middleware: middlewares.values()}, 'broadcasting file change')
+        for await (const middleware of middlewares.values()) {
+            await middleware(requestFromWebSocketConnection, response)
+            shouldBreak = response.headersSent
+        }
+        if (shouldBreak) break
+        const route = siteGenerator.routes.values().find(route => route.match(url.pathname))
+        logger.info({ uri: url.pathname, filePath, relativePath}, 'broadcast')
+        if (url.pathname.replace(ext, '').includes(relativePath.replace(ext, '')) || route) {
             filePath = route ? route.filePath : filePath
-            const page = await siteGenerator.renderPage(filePath, {req: context.req, res: context.res})
-            hotReloadNamespace.to(socketId).emit('file changed', {fileThatTriggeredIt: relativePath, fileName: relativePath, data: page.output })
+            const page = await siteGenerator.renderPage(filePath, {req: requestFromWebSocketConnection, res: socket.res})
+            socket.emit('file changed', {fileThatTriggeredIt: relativePath, fileName: relativePath, data: page.output })
         }
 
         if (siteGenerator.localImports.get(filePath)) {
             for (const file of siteGenerator.localImports.get(filePath)) {
                 const relativeFileIncludes = relative(PAGES, file)
-                const route = siteGenerator.routes.values().find(route => route.match(context.url.pathname))
-                if (context.url.pathname.replace(ext, '').includes(relativeFileIncludes.replace(ext, '')) || route) {
-                    const page = await siteGenerator.renderPage(file, {req: context.req, res: context.res})
-                    hotReloadNamespace.to(socketId).emit('file changed', { fileThatTriggeredIt: relativePath, fileName: file, data: page.output })
+                const route = siteGenerator.routes.values().find(route => route.match(url.pathname))
+                if (url.pathname.replace(ext, '').includes(relativeFileIncludes.replace(ext, '')) || route) {
+                    const page = await siteGenerator.renderPage(file, {req: requestFromWebSocketConnection, res: socket.res})
+                    socket.emit('file changed', { fileThatTriggeredIt: relativePath, fileName: file, data: page.output })
                 }
             }
         }
@@ -137,7 +215,7 @@ async function main (server, execute) {
             middlewares.add(await middleware.default())
         }    
     } catch (e) {
-        logger.warn(e)
+        logger.warn(e.message)
     }
 
     const req = new IncomingMessageOnRequest()
@@ -149,6 +227,8 @@ async function main (server, execute) {
     const honeypoturls = []
     const clients = new Map()
     const hotReloadNamespace = io.of('/hot-reload')
+    const loggerNamespace = io.of('/logger')
+    
     
     const chokidar = new ChokidarWannabee(PAGES, async (folder, event, filePath, absolutePath) => {
         let filesWithThisLayout = siteGenerator.layouts.get(absolutePath)
@@ -159,57 +239,28 @@ async function main (server, execute) {
         return true
     })
 
+    loggerNamespace.on('connection', socket => {
+        logger.info({message: 'connected to logger %s', id: socket.id}, 'logger:connection')
+        clients.set(socket.id, socket)
+        socket.on('disconnect', () => {
+            clients.delete(socket.id)
+            logger.info({message: '/logger user disconnected %s', id: socket.id}, 'logger:connection')
+        })
+        socket.on('get logs', () => {
+            const interval = setInterval(() => {
+                for (const log of ringBuffer) {
+                    socket.emit('logs', log)
+                }
+            }, 1000)
+        })
+    })
+
     hotReloadNamespace.on('connection', socket => {
         logger.info({message: 'connected to hot reloading %s', id: socket.id}, 'hot-reload:connection')
-        const url = new URL(socket.handshake.headers.referer)
-        url.pathname = ifSlashAddIndex(url.pathname)
-        const req = new IncomingMessageOnSocket(socket, url)
-        req.method = 'GET'
-        req.url = url.pathname
-        req.headers = socket.handshake.headers
-        logger.info({message: 'connecting to the hot-reload namespace', uri: url.pathname}, 'hot-reload:connection')
-        clients.set(socket.id, {url, req, res: null})
+        clients.set(socket.id, socket)
         socket.on('disconnect', () => {
             clients.delete(socket.id)
             logger.info({message: '/hot-reload user disconnected %s', id: socket.id}, 'hot-reload:connection')
-        })
-    })
-    
-    io.on('connection', socket => {
-        logger.info({message: `connected ${socket.id}`, referer: socket.handshake.headers.referer}, 'io:connection')
-        const url = new URL(socket.handshake.headers.referer)
-        url.pathname = ifSlashAddIndex(url.pathname)
-        const req = new IncomingMessageOnSocket(socket, url)
-        req.url = url.pathname
-        req.urlParsed = url
-        req.headers = socket.handshake.headers
-        const route = routes.values().find(route => route.match(url.pathname))
-        if (route) {
-            req.params = new RequestParams(req.urlParsed, route.regex)
-        }
-        const res = req.res
-        socket.on('chat message', async msg => {
-            logger.info({message: 'chat message', msg}, 'chat message')
-            if (msg.method) {
-                req.method = msg.method
-            }
-            if (msg.headers) {
-                req.headers = msg.headers
-            }
-            const params = new URLSearchParams(msg)
-            const obj = {}
-            for (const [key, value] of params.entries()) {
-                obj[key] = value
-            }
-            req.body = obj
-    
-            for await (const middleware of middlewares.values()) {
-                await middleware(req, res)
-            }
-            const ext = extname(url.pathname).substring(1)
-            const { output, template } = await renderTemplate(route.filePath, routes, layouts, {req, res })
-            const relativePath = relative(PAGES, route.filePath)
-            socket.emit('chat message:response', {fileThatTriggeredIt: route.filePath, fileName: relativePath, data: output })
         })
     })
 
@@ -221,7 +272,6 @@ async function main (server, execute) {
 
         for await (const middleware of middlewares.values()) {
             await middleware(req, res)
-            if (res.headersSent) return
         }
 
         req.urlParsed = new URL(req.url ?? '/', `http://${req.headers?.host ?? 'localhost'}`)
@@ -232,14 +282,15 @@ async function main (server, execute) {
             const ext = extname(req.url).substring(1)
             req.params = new RequestParams(req.urlParsed, route.regex)
             logger.info({message: 'handling route', url: req.url}, 'route')
-            const { output, template } = await siteGenerator.renderPage(route.filePath, {req, res })
+            const page = await siteGenerator.renderPage(route.filePath, { req, res })
             const method = req.method.toLowerCase()
             if (res.headersSent) return
-            if (template.context && template.context[method]) {
-                return await template.context[method](req, res)
+            if (page && page[method]) {
+                await page[method].apply(page, [req, res])
+                if (res.headersSent) return
             }
             res.setHeader('Content-Type', CONTENT_TYPE[ext] ?? 'text/html')
-            return res.end(output)
+            return res.end(page.output)
         }
 
         req.params = new RequestParams(req.urlParsed, null)
