@@ -5,8 +5,12 @@ import { TemplateLiteralRenderer } from '../src/TemplateLiteralRenderer.mjs'
 export default {
     title: 'Login',
     layout: 'pages/layout.html',
-    route: '/login',
-    error: null,
+    route: {
+        test(uri) {
+            return uri === '/login' || uri === '/login/'
+        }
+    },
+    error: '',
     errorMessage: '',
     generatedCsrf: '123456',
     async get (req, res) {
@@ -19,12 +23,10 @@ export default {
             res.statusCode = 302
             res.setHeader('Set-Cookie', 'session=admin')
             res.setHeader('Location', '/admin')
-            res.end(this.output)
+            res.render(this)
             return
         }
-        const data = await readFile('./pages/error.html', 'utf-8')
         this.error = 'Invalid credentials'
-        this.errorMessage = await (new TemplateLiteralRenderer(resolve, readFile)).render(data, { error: this.error })
         await res.render(this)
     }
 }

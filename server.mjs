@@ -108,15 +108,6 @@ class IncomingMessageOnRequest extends IncomingMessage {
 
 }
 
-class ConnectedClient {
-    constructor(socketId, broadcastOperator, connectionHeaders) {
-        this.socketId = socketId
-        this.broadcastOperator = broadcastOperator
-        this.headers = connectionHeaders
-        this.url = new URL(connectionHeaders.referer)
-    }
-}
-
 async function* readAllFiles(folder) {
     const dir = await opendir(folder);
     for await (const dirent of dir) {
@@ -131,7 +122,7 @@ async function* readAllFiles(folder) {
 
 function ifSlashAddIndex(pathname) {
     let modifiedPathname = pathname
-    if (/\/$/.test(modifiedPathname)) {
+    if (/^\/$/.test(modifiedPathname)) {
         modifiedPathname = `${modifiedPathname}index.html`
     }
     return modifiedPathname
@@ -180,23 +171,34 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, clients) {
             shouldBreak = response.headersSent
         }
         if (shouldBreak) break
-        const route = siteGenerator.routes.values().find(route => route.match(url.pathname))
-        logger.info({ uri: url.pathname, filePath, relativePath}, 'broadcast')
-        if (url.pathname.replace(ext, '').includes(relativePath.replace(ext, '')) || route) {
-            filePath = route ? route.filePath : filePath
-            const page = await siteGenerator.renderPage(filePath, {req: requestFromWebSocketConnection, res: socket.res})
-            socket.emit('file changed', {fileThatTriggeredIt: relativePath, fileName: relativePath, data: page.output })
-        }
 
-        if (siteGenerator.localImports.get(filePath)) {
-            for (const file of siteGenerator.localImports.get(filePath)) {
-                const relativeFileIncludes = relative(PAGES, file)
-                const route = siteGenerator.routes.values().find(route => route.match(url.pathname))
-                if (url.pathname.replace(ext, '').includes(relativeFileIncludes.replace(ext, '')) || route) {
-                    const page = await siteGenerator.renderPage(file, {req: requestFromWebSocketConnection, res: socket.res})
-                    socket.emit('file changed', { fileThatTriggeredIt: relativePath, fileName: file, data: page.output })
-                }
-            }
+        // TODO: See if this can be replaced
+        // Test this for a while. I commented out 2025-02-12 7:01 PM CST.
+        // If it works, delete the commented out code and the routes variable in siteGenerator
+        // const route = siteGenerator.routes.values().find(route => route.match(url.pathname))
+        // logger.info({ uri: url.pathname, filePath, relativePath}, 'broadcast')
+        // if (url.pathname.replace(ext, '').includes(relativePath.replace(ext, '')) || route) {
+        //     filePath = route ? route.filePath : filePath
+        //     const page = await siteGenerator.renderPage(filePath, {req: requestFromWebSocketConnection, res: socket.res})
+        //     socket.emit('file changed', {fileThatTriggeredIt: relativePath, fileName: relativePath, data: page.output })
+        // }
+
+        // if (siteGenerator.localImports.get(filePath)) {
+        //     for (const file of siteGenerator.localImports.get(filePath)) {
+        //         const relativeFileIncludes = relative(PAGES, file)
+        //         const route = siteGenerator.routes.values().find(route => route.match(url.pathname))
+        //         if (url.pathname.replace(ext, '').includes(relativeFileIncludes.replace(ext, '')) || route) {
+        //             const page = await siteGenerator.renderPage(file, {req: requestFromWebSocketConnection, res: socket.res})
+        //             socket.emit('file changed', { fileThatTriggeredIt: relativePath, fileName: file, data: page.output })
+        //         }
+        //     }
+        // }
+
+        const page = siteGenerator.pages.values().find(page => page.route?.test(url.pathname))
+        if (page) {
+            socket.emit('file changed', {fileThatTriggeredIt: relativePath, fileName: relativePath, data: page.output })
+        } else {
+            logger.info({message: 'no page found', url: url.pathname}, 'broadcast')
         }
     }
 }
@@ -265,8 +267,8 @@ async function main (server, execute) {
     })
 
     server.on('request', async (req, res) => {
-        const url = new URL(req.url, `http://${req.headers.host}`)
-        if (shortCircuitUrls.some(shortCircuitUrl => url.pathname.includes(shortCircuitUrl))) {
+        req.urlParsed = new URL(req.url ?? '/', `http://${req.headers?.host ?? 'localhost'}`)
+        if (shortCircuitUrls.some(shortCircuitUrl => req.urlParsed.pathname.includes(shortCircuitUrl))) {
             return
         }
 
@@ -274,39 +276,36 @@ async function main (server, execute) {
             await middleware(req, res)
         }
 
-        req.urlParsed = new URL(req.url ?? '/', `http://${req.headers?.host ?? 'localhost'}`)
-        url.pathname = ifSlashAddIndex(url.pathname)
-        const route = siteGenerator.routes.values().find(route => route.match(url.pathname))
+        req.urlParsed.pathname = ifSlashAddIndex(req.urlParsed.pathname)
+        let foundPage = siteGenerator.pages.values().find(page => page.route?.test(req.urlParsed.pathname))
         logger.info({url: req.urlParsed, headers: req.headers}, 'request')
-        if (route) {
+        const method = req.method.toLowerCase()
+        if (foundPage && foundPage[method]) {
+            foundPage = await siteGenerator.renderPage(foundPage.filePath, {req, res})
             const ext = extname(req.url).substring(1)
-            req.params = new RequestParams(req.urlParsed, route.regex)
-            logger.info({message: 'handling route', url: req.url}, 'route')
-            const page = await siteGenerator.renderPage(route.filePath, { req, res })
-            const method = req.method.toLowerCase()
+            req.params = new RequestParams(req.urlParsed, foundPage.route.regex)
+            logger.info({message: 're rendering page for', url: req.urlParsed}, 'page')
+            await foundPage[method].call(foundPage, req, res)
+            console.log('include', foundPage.include)
             if (res.headersSent) return
-            if (page && page[method]) {
-                await page[method].apply(page, [req, res])
-                if (res.headersSent) return
-            }
-            res.setHeader('Content-Type', CONTENT_TYPE[ext] ?? 'text/html')
-            return res.end(page.output)
+            res.setHeader('Content-Type', foundPage.contentType)
+            return res.end(foundPage.output)
         }
 
         req.params = new RequestParams(req.urlParsed, null)
         try {
-            const ext = extname(url.pathname).substring(1)
-            const isHoneypot = honeypoturls.includes(join(SITE_FOLDER, url.pathname))
+            const ext = extname(req.urlParsed.pathname).substring(1)
+            const isHoneypot = honeypoturls.includes(join(SITE_FOLDER, req.urlParsed.pathname))
             if (isHoneypot) {
-                logger.info({message: 'honeypot', url: url.pathname, status: 404}, 'honeypot')
+                logger.info({message: 'honeypot', url: req.urlParsed.pathname, status: 404}, 'honeypot')
                 res.statusCode = 404
                 return res.end('Not found')
             }
 
             if (ext) {
-                await access(join(SITE_FOLDER, url.pathname), constants.F_OK)
+                await access(join(SITE_FOLDER, req.urlParsed.pathname), constants.F_OK)
                 res.setHeader('Content-Type', CONTENT_TYPE[ext] ?? 'application/octet-stream')
-                return createReadStream(join(SITE_FOLDER, url.pathname)).pipe(res)
+                return createReadStream(join(SITE_FOLDER, req.urlParsed.pathname)).pipe(res)
             }
         } catch (e) {
             logger.error(e.message)

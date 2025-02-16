@@ -2,7 +2,7 @@ class RequestParams {
     constructor(url, regex) {
         this.params = new URLSearchParams(url.search)
         this.regex = regex
-        if (this.regex) {
+        if (this.regex && this.regex.exec) {
             this.matched = this.regex.exec(url.pathname)
             Object.keys(this.matched?.groups ?? {}).forEach(key => {
                 this.params.set(key, this.matched.groups[key])

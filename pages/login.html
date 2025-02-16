@@ -13,4 +13,4 @@
     <input type="hidden" name="csrf" value="${generatedCsrf}">
     <button type="submit">Login</button>
 </form>
-${include('./pages/error.html', this)}
+${includeIf('./pages/error.html', error)}

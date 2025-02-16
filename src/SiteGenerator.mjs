@@ -28,6 +28,7 @@ class SiteGenerator extends EventEmitter {
         this.siteFolder = siteFolder
         this.filesToCopyOver = filesToCopyOver
         this.foldersToCopyOver = foldersToCopyOver
+        this.pages = new Map()
     }
 
     async * readAllFiles (folder) {
@@ -175,6 +176,7 @@ class SiteGenerator extends EventEmitter {
             page.init()
         }
         process.emit(EVENTS.TEMPLATE_RENDERED, filePath, page)
+        this.pages.set(filePath, page)
         return page
     }
 }

@@ -1,3 +1,7 @@
+import { UriToStaticFileRoute } from './UriToStaticFileRoute.mjs'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 class Page {
     constructor (rootFolder, filePath, template, rendererFactory, readFile) {
         this.rootFolder = rootFolder
@@ -7,64 +11,62 @@ class Page {
         this.rendererFactory = rendererFactory
         this.contentType = 'text/html'
         this.readFile = readFile
+        this.renderer = null
     }
-
-    include (context, filePath) {
-        this.readFile(filePath, 'utf-8')
-        .then(data => {
-            return this.rendererFactory.get(filePath).then(async ({ template, context: defaultContext }) => {
-                if (defaultContext) {
-                    context = Object.assign({}, context, defaultContext)
-                }
-                return await template.render(data, context)
-            })
-        }).catch(console.error)
+    include (filePath) {
+        const data = readFileSync(filePath, 'utf-8')
+        return this.renderer.render(data, this)
     }
-
+    includeIf (filePath, condition) {
+        if (condition) {
+            return this.include(filePath)
+        }
+        return ''
+    }
     async render (context) {
-        const { template, context: defaultContext} = await this.rendererFactory.get(this.filePath)
-        
-        if (!template) {
+        const { renderer, context: defaultContext} = await this.rendererFactory.get(this.filePath)
+        this.renderer = renderer
+
+        if (!this.renderer) {
             return null
         }
 
+        // If there is a default context, merge it with the context passed in
         if (defaultContext) {
-            context = Object.assign({}, context, defaultContext)
+            context = Object.assign({}, defaultContext, context)
         }
         
         context = this.clearBodyFromPreviousRenders(context)
-        context.include = this.include.bind(this, context)
-        this.output = await template.render(this.template, context)
-
-        Array.from(['get', 'post', 'put', 'delete', 'head', 'options', 'trace']).forEach(method => {
-            if (!template.context[method]) return
-            if (typeof template.context[method] === 'function') {
-                this[method] = template.context[method].bind(this)
-            }
-        })
-        Object.keys(template.context).reduce((acc, key) => {
-            if (acc[key]) {
-                if(typeof(acc[key]) === 'function') {
-                    acc[key] = acc[key].bind(acc)
-                }
-                return acc
-            }
-
-            if (typeof(template.context[key]) === 'function') {
-                acc[key] = template.context[key].bind(acc)
-                return acc
-            }
-            acc[key] = template.context[key]
+        
+        // Set context properties to this Page instance so that the API for interacting with the Page is "easy".
+        Object.keys(context).reduce((acc, key) => {
+            acc[key] = context[key]
             return acc
         }, this)
 
-        if (!this.route) {
-            this.route = this.filePath.replace(this.rootFolder, '').replace(/\\/g, '/')
+        this.output = this.renderer.render(this.template, this)
+        if (this.layout) {
+            this.layout = resolve(this.layout)
+            const layoutHtml = await this.readFile(this.layout, 'utf-8')
+            this.output = this.renderer.render(layoutHtml, { body: this.output, ...this })
         }
 
-        if (typeof this.route === 'string' && this.route.endsWith('.md')) {
-            this.route = this.route.replace('.md', '.html')
+        if (this.route && this.route.test && !(this.route instanceof UriToStaticFileRoute)) {
+            this.route = new UriToStaticFileRoute(this.route, this.filePath)
         }
+
+        if (!this.route) {
+            this.route = new UriToStaticFileRoute(this.filePath.replace(this.rootFolder, '').replace(/\\/g, '/'), this.filePath)
+        }
+
+        if (typeof(this.route) === 'string') {
+            this.route = new UriToStaticFileRoute(this.route, this.filePath)
+        }
+
+        if (this.filePath.endsWith('.md')) {
+            this.route.filePath = this.filePath.replace('.md', '.html')
+        }
+
         return this
     }
 

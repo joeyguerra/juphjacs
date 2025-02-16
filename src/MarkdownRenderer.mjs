@@ -9,9 +9,9 @@ class MarkdownRenderer extends TemplateLiteralRenderer {
         return filePath.endsWith('.md')
     }
 
-    async render(content, initialContext = {}, isLayout = false) {
-        let data = !isLayout ? this.markdown.render(content) : content
-        let html = await super.render(data, initialContext, isLayout)
+    render(content, initialContext = {}) {
+        let data = this.markdown.render(content)
+        let html = super.render(data, initialContext)
         return html
     }
 }
