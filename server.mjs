@@ -4,12 +4,14 @@ import { Logger } from './src/Logger.mjs'
 import { dirname, extname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createServer, IncomingMessage, ServerResponse } from 'node:http'
-import { opendir, mkdir, access } from 'node:fs/promises'
+import { opendir, mkdir, stat } from 'node:fs/promises'
 import { Server as SocketServer } from 'socket.io'
 import { ChokidarWannabee } from './src/ChokidarWannabee.mjs'
 import { RequestParams } from './src/RequestParams.mjs'
 import { createReadStream, constants } from 'node:fs'
 import { RingBuffer } from './src/RingBuffer.mjs'
+import { FetchRequest, FetchResponse } from './src/FetchApi.mjs'
+import { Page } from './src/Page.mjs'
 
 const DEBUG = process.env.DEBUG
 const PACKAGE_NAME = `${pkg.name}:server`
@@ -39,74 +41,6 @@ const foldersToCopyOver = Array.from(['js', 'css', 'images'])
 const siteGenerator = new SiteGenerator(__dirname, PAGES, SITE_FOLDER, filesToCopyOver, foldersToCopyOver)
 
 siteGenerator.on('error', e => logger.error(e, 'error in site generator'))
-
-class IncomingMessageOnSocket extends IncomingMessage {
-    constructor(socket, urlParsed) {
-        super(socket)
-        this.urlParsed = urlParsed
-        this.res = new ServerResponse(this)
-    }
-    async formData() {
-    }
-
-    async json() {
-    }
-
-    async text() {
-    }
-
-    async arrayBuffer() {
-    }
-
-    async blob() {
-    }
-
-    async buffer() {
-    }
-}
-
-class IncomingMessageOnRequest extends IncomingMessage {
-    #request = null
-    constructor(req) {
-        super(req)
-        this.url = this.url ?? '/'
-        this.urlParsed = new URL(this.url, `http://${req?.headers?.host ?? 'localhost'}`)
-    }
-
-    async formData() {
-        const form = new FormData()
-        const text = await this.text()
-        const params = new URLSearchParams(text)
-        for (const [key, value] of params) {
-            form.append(key, value)
-        }
-        return form
-    }
-
-    async json() {
-        return await JSON.parse(await this.text())
-    }
-
-    async text() {
-        return new Promise((resolve, reject) => {
-            let data = ''
-            this.on('data', chunk => data += chunk)
-            this.on('end', () => resolve(data))
-            this.on('error', reject)
-        })
-    }
-
-    async arrayBuffer() {
-    }
-
-    async blob() {
-
-    }
-
-    async buffer() {
-    }
-
-}
 
 async function* readAllFiles(folder) {
     const dir = await opendir(folder);
@@ -159,12 +93,12 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, clients) {
     for (const [socketId, socket] of clients.entries()) {
         const url = new URL(socket.handshake.headers.referer)
         url.pathname = ifSlashAddIndex(url.pathname)
-        const requestFromWebSocketConnection = new IncomingMessageOnSocket(socket, url)
+        const requestFromWebSocketConnection = new FetchRequest(socket)
         requestFromWebSocketConnection.method = 'GET'
         requestFromWebSocketConnection.url = url.pathname
         requestFromWebSocketConnection.headers = socket.handshake.headers
         let shouldBreak = false
-        const response = new ServerResponse(requestFromWebSocketConnection)
+        const response = new FetchResponse(requestFromWebSocketConnection)
         logger.info({shouldBreak, url, filePath, middleware: middlewares.values()}, 'broadcasting file change')
         for await (const middleware of middlewares.values()) {
             await middleware(requestFromWebSocketConnection, response)
@@ -172,31 +106,10 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, clients) {
         }
         if (shouldBreak) break
 
-        // TODO: See if this can be replaced
-        // Test this for a while. I commented out 2025-02-12 7:01 PM CST.
-        // If it works, delete the commented out code and the routes variable in siteGenerator
-        // const route = siteGenerator.routes.values().find(route => route.match(url.pathname))
-        // logger.info({ uri: url.pathname, filePath, relativePath}, 'broadcast')
-        // if (url.pathname.replace(ext, '').includes(relativePath.replace(ext, '')) || route) {
-        //     filePath = route ? route.filePath : filePath
-        //     const page = await siteGenerator.renderPage(filePath, {req: requestFromWebSocketConnection, res: socket.res})
-        //     socket.emit('file changed', {fileThatTriggeredIt: relativePath, fileName: relativePath, data: page.output })
-        // }
-
-        // if (siteGenerator.localImports.get(filePath)) {
-        //     for (const file of siteGenerator.localImports.get(filePath)) {
-        //         const relativeFileIncludes = relative(PAGES, file)
-        //         const route = siteGenerator.routes.values().find(route => route.match(url.pathname))
-        //         if (url.pathname.replace(ext, '').includes(relativeFileIncludes.replace(ext, '')) || route) {
-        //             const page = await siteGenerator.renderPage(file, {req: requestFromWebSocketConnection, res: socket.res})
-        //             socket.emit('file changed', { fileThatTriggeredIt: relativePath, fileName: file, data: page.output })
-        //         }
-        //     }
-        // }
-
-        const page = siteGenerator.pages.values().find(page => page.route?.test(url.pathname))
+        const page = siteGenerator.pages.values().find(page => page.route.filePath.includes(url.pathname))
+       
         if (page) {
-            socket.emit('file changed', {fileThatTriggeredIt: relativePath, fileName: relativePath, data: page.output })
+            socket.emit('file changed', {fileThatTriggeredIt: relativePath, fileName: relativePath, data: page.content })
         } else {
             logger.info({message: 'no page found', url: url.pathname}, 'broadcast')
         }
@@ -220,10 +133,10 @@ async function main (server, execute) {
         logger.warn(e.message)
     }
 
-    const req = new IncomingMessageOnRequest()
+    const req = new FetchRequest()
     req.url = 'http://localhost/'
-    const res = new ServerResponse(req)
 
+    const res = new FetchResponse(req)
     const io = new SocketServer(server)
     const shortCircuitUrls = ['socket.io']
     const honeypoturls = []
@@ -277,42 +190,45 @@ async function main (server, execute) {
         }
 
         req.urlParsed.pathname = ifSlashAddIndex(req.urlParsed.pathname)
-        let foundPage = siteGenerator.pages.values().find(page => page.route?.test(req.urlParsed.pathname))
-        logger.info({url: req.urlParsed, headers: req.headers}, 'request')
-        const method = req.method.toLowerCase()
-        if (foundPage && foundPage[method]) {
-            foundPage = await siteGenerator.renderPage(foundPage.filePath, {req, res})
-            const ext = extname(req.url).substring(1)
-            req.params = new RequestParams(req.urlParsed, foundPage.route.regex)
-            logger.info({message: 're rendering page for', url: req.urlParsed}, 'page')
-            await foundPage[method].call(foundPage, req, res)
-            console.log('include', foundPage.include)
-            if (res.headersSent) return
-            res.setHeader('Content-Type', foundPage.contentType)
-            return res.end(foundPage.output)
+
+        const ext = extname(req.urlParsed.pathname).substring(1)
+        const isHoneypot = honeypoturls.includes(join(SITE_FOLDER, req.urlParsed.pathname))
+        if (isHoneypot) {
+            logger.info({message: 'honeypot', url: req.urlParsed.pathname, status: 404}, 'honeypot')
+            res.statusCode = 404
+            return res.end('Not found')
         }
 
-        req.params = new RequestParams(req.urlParsed, null)
-        try {
-            const ext = extname(req.urlParsed.pathname).substring(1)
-            const isHoneypot = honeypoturls.includes(join(SITE_FOLDER, req.urlParsed.pathname))
-            if (isHoneypot) {
-                logger.info({message: 'honeypot', url: req.urlParsed.pathname, status: 404}, 'honeypot')
-                res.statusCode = 404
-                return res.end('Not found')
+        if (!['html'].includes(ext)) {
+            try {
+                const stats = await stat(join(SITE_FOLDER, req.urlParsed.pathname), constants.F_OK)
+                if (!stats.isDirectory()) {
+                    res.setHeader('Content-Type', CONTENT_TYPE[ext] ?? 'text/plain')
+                    return createReadStream(join(SITE_FOLDER, req.urlParsed.pathname)).pipe(res)
+                } else {
+                    res.statusCode = 404
+                    return res.end('Not found')
+                }
+            } catch (e) {
+                logger.error(e.message)
             }
+    
+        }
 
-            if (ext) {
-                await access(join(SITE_FOLDER, req.urlParsed.pathname), constants.F_OK)
-                res.setHeader('Content-Type', CONTENT_TYPE[ext] ?? 'application/octet-stream')
-                return createReadStream(join(SITE_FOLDER, req.urlParsed.pathname)).pipe(res)
+        try {
+            const page = await Page.get(req.urlParsed, PAGES)
+            if (page[req.method.toLowerCase()]) {
+                await page[req.method.toLowerCase()](req, res)
+            } else {
+                await page.render()
+                res.statusCode = 200
+                res.end(page.content)
             }
         } catch (e) {
-            logger.error(e.message)
-        }
-    
-        res.statusCode = 404
-        res.end('Not found')
+            logger.error(`${e.message} for ${req.urlParsed.pathname} in ${PAGES}`)
+            res.statusCode = 500
+            res.end('Internal server error')
+    }
     })
 
     await siteGenerator.generateStaticSite(req, res)
@@ -329,7 +245,11 @@ async function main (server, execute) {
     })
 }
 
-const server = createServer({ IncomingMessage: IncomingMessageOnRequest })
+const server = createServer({
+    IncomingMessage: FetchRequest,
+    ServerResponse: FetchResponse
+})
+
 const args = process.argv.reduce((acc, current, i, items) => {
     if (current === '--execute') {
         acc.execute = items[i + 1]

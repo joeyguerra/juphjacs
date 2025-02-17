@@ -1,8 +1,14 @@
 import { TemplateLiteralRenderer } from './TemplateLiteralRenderer.mjs'
+import MarkdownIt from 'markdown-it'
+
 class MarkdownRenderer extends TemplateLiteralRenderer {
-    constructor (resolve, readFile, markdown) {
-        super(resolve, readFile)
-        this.markdown = markdown
+    constructor (markdown) {
+        super()
+        this.markdown = new MarkdownIt({
+            html: true,
+            linkify: true,
+            typographer: true
+        })
     }
 
     accepts (filePath) {

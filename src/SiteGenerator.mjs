@@ -78,7 +78,6 @@ class SiteGenerator extends EventEmitter {
             }
             await this.copyFoldersFrom(join(this.pagesFolder, folder), join(this.siteFolder, folder))
         }
-
         for await (const file of this.readAllFiles(this.pagesFolder)) {
             let ext = extname(file)
             await this.genFile(file, req, res)
@@ -93,16 +92,23 @@ class SiteGenerator extends EventEmitter {
         if (!['.md', '.html', '.xml'].includes(ext)) return
         let newFileName = file.replace('.md', '.html').replace(this.pagesFolder, this.siteFolder)
         await mkdir(dirname(newFileName), { recursive: true })
+        req.url = `http://newFileName/${relative(this.siteFolder, newFileName)}`
+        req.urlParsed = new URL(req.url, `http://${req.headers?.host ?? 'localhost'}`)
+        const page = await Page.get(req.urlParsed, this.pagesFolder)
+        process.emit(EVENTS.PRE_TEMPLATE_RENDER, file, page)
+        await page.render()
+        let keyName = resolve(this.rootFolder, page.layout)
+        let key = this.layouts.get(keyName)
+        if (!key) {
+            this.layouts.set(keyName, new Set())
+            key = this.layouts.get(keyName)
+        }
+        key.add(resolve(this.rootFolder, file))
 
-        req.url = `http://localhost/${relative(this.siteFolder, newFileName)}`
-        req.urlParsed = new URL(req.url)
-        req.params = new RequestParams(new URL(req.url), null)
-
-        const page = await this.renderPage(file, { req, res })
         const importRegex = /import\s+{[^}]+}\s+from\s+['"]([^'"]+\.mjs)['"]/g
-        if (page.output.includes('import') || page.output.includes('require')) {
+        if (page.content.includes('import') || page.content.includes('require')) {
             let match = null
-            while ((match = importRegex.exec(page.output)) !== null) {
+            while ((match = importRegex.exec(page.content)) !== null) {
                 let keyName = resolve(this.pagesFolder, match[1].replace(/^\//, ''))
                 let key = this.localImports.get(keyName)
                 if (!key) {
@@ -114,9 +120,9 @@ class SiteGenerator extends EventEmitter {
         }
 
         const cssRegex = /<link[^>]+href="(?!http|https)([^"]+\.css)"[^>]*>/g
-        if (page.output.includes('<link')) {
+        if (page.content.includes('<link')) {
             let match = null
-            while ((match = cssRegex.exec(page.output)) !== null) {
+            while ((match = cssRegex.exec(page.content)) !== null) {
                 let keyName = resolve(this.pagesFolder, 'css', match[1].replace(/^\//, ''))
                 let key = this.localImports.get(keyName)
                 if (!key) {
@@ -128,9 +134,9 @@ class SiteGenerator extends EventEmitter {
         }
 
         const scriptRegex = /<script[^>]+src="(?!http|https)([^"]+)"[^>]*><\/script>/g
-        if (page.output.includes('<script')) {    
+        if (page.content.includes('<script')) {    
             let match = null
-            while ((match = scriptRegex.exec(page.output)) !== null) {    
+            while ((match = scriptRegex.exec(page.content)) !== null) {    
                 let keyName = resolve(this.pagesFolder, 'js', match[1].replace(/^\//, ''))
                 let key = this.localImports.get(keyName)
                 if (!key) {
@@ -140,43 +146,9 @@ class SiteGenerator extends EventEmitter {
                 key.add(resolve(this.rootFolder, file))
             }
         }
-        await writeFile(newFileName, page.output)
-        return page
-    }
-
-    async renderPage(filePath, initialContext = {}) {
-        let ext = extname(filePath)
-        const rootFolder = dirname(filePath)
-        let content = await readFile(filePath, 'utf-8')
-        const templateRendererFactory = new TemplateRendererFactory(extname, [
-            new MarkdownRenderer(resolve, readFile, new MarkdownIt({
-                html: true,
-                linkify: true,
-                typographer: true
-            })),
-            new TemplateLiteralRenderer(resolve, readFile),
-            new XmlRenderer(resolve, readFile)
-        ])
-        const page = new Page(rootFolder, filePath, content, templateRendererFactory, readFile)
-        process.emit(EVENTS.PRE_TEMPLATE_RENDER, filePath, initialContext, content)
-        const template = await page.render(initialContext)
-        if (page.route) {
-            this.routes.add(new UriToStaticFileRoute(page.route, resolve(this.rootFolder, filePath)))
-        }
-        if (page.layout) {
-            let keyName = resolve(this.rootFolder, page.layout)
-            let key = this.layouts.get(keyName)
-            if (!key) {
-                this.layouts.set(keyName, new Set())
-                key = this.layouts.get(keyName)
-            }
-            key.add(resolve(this.rootFolder, filePath))
-        }
-        if (page.init ) {
-            page.init()
-        }
-        process.emit(EVENTS.TEMPLATE_RENDERED, filePath, page)
-        this.pages.set(filePath, page)
+        this.pages.set(newFileName, page)
+        await writeFile(newFileName, page.content)
+        process.emit(EVENTS.TEMPLATE_RENDERED, newFileName, page)
         return page
     }
 }
