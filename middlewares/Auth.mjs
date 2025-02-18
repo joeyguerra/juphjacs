@@ -6,7 +6,6 @@ class Auth {
 
     async execute () {
         const { headers } = this.request
-        console.log(headers.cookie)
     }
 }
 

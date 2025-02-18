@@ -1,4 +1,4 @@
-import { SiteGenerator, EVENTS } from './src/SiteGenerator.mjs'
+import { SiteGenerator } from './src/SiteGenerator.mjs'
 import pkg from './package.json' with {type: 'json'}
 import { Logger } from './src/Logger.mjs'
 import { dirname, extname, join, relative } from 'node:path'
@@ -11,7 +11,7 @@ import { RequestParams } from './src/RequestParams.mjs'
 import { createReadStream, constants } from 'node:fs'
 import { RingBuffer } from './src/RingBuffer.mjs'
 import { FetchRequest, FetchResponse } from './src/FetchApi.mjs'
-import { Page } from './src/Page.mjs'
+import { Page, EVENTS } from './src/Page.mjs'
 
 const DEBUG = process.env.DEBUG
 const PACKAGE_NAME = `${pkg.name}:server`
@@ -20,7 +20,7 @@ const ringBuffer = new RingBuffer(100)
 const logger = new Logger(pkg.name, ringBuffer, DEBUG)
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PAGES = join(__dirname, 'pages')
-const SITE_FOLDER = '_site'
+const SITE_FOLDER = join(__dirname, '_site')
 const CONTENT_TYPE = {
     css: 'text/css',
     ico: 'image/x-icon',
@@ -199,7 +199,8 @@ async function main (server, execute) {
             return res.end('Not found')
         }
 
-        if (!['html'].includes(ext)) {
+        // TODO: This strategy is not robust. It might need to be improved.
+        if (ext.length > 0 && !['html'].includes(ext)) {
             try {
                 const stats = await stat(join(SITE_FOLDER, req.urlParsed.pathname), constants.F_OK)
                 if (!stats.isDirectory()) {
@@ -210,13 +211,24 @@ async function main (server, execute) {
                     return res.end('Not found')
                 }
             } catch (e) {
-                logger.error(e.message)
+                logger.error(`${e.message} for ${req.urlParsed.pathname} in ${SITE_FOLDER}`)
             }
-    
         }
 
         try {
-            const page = await Page.get(req.urlParsed, PAGES)
+            const existing = siteGenerator.pages.values().find(page => page.route.filePath.includes(req.urlParsed.pathname))
+            let filePath = join(PAGES, req.urlParsed.pathname)
+            if (existing) {
+                filePath = existing.filePath
+            }
+            
+            const page = await Page.get(filePath, PAGES)
+    
+            if (!existing) {
+                res.statusCode = 404
+                return res.end('Not found')
+            }
+
             if (page[req.method.toLowerCase()]) {
                 await page[req.method.toLowerCase()](req, res)
             } else {

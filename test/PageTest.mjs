@@ -20,7 +20,7 @@ await test('Page HTTP API', async t => {
 
         server.on('request', async (req, res) => {
             try {
-                const page = await Page.get(new URL(req.url, `http://${req.headers.host}`), __dirname)
+                const page = await Page.get(getFileFromUrl(req), __dirname)
                 await page.get(req, res)
             } catch (e) {
                 console.error(e)
@@ -53,7 +53,7 @@ await test('Page HTTP API', async t => {
         })
 
         server.on('request', async (req, res) => {
-            const page = await Page.get(new URL(req.url, `http://${req.headers.host}`), __dirname)
+            const page = await Page.get(getFileFromUrl(req), __dirname)
             try {
                 await page.get(req, res)
             } catch (e) {
@@ -87,7 +87,7 @@ await test('Page HTTP API', async t => {
         })
 
         server.on('request', async (req, res) => {
-            const page = await Page.get(new URL(req.url, `http://${req.headers.host}`), __dirname)
+            const page = await Page.get(getFileFromUrl(req), __dirname)
             try {
                 await page.get(req, res)
             } catch (e) {
@@ -121,7 +121,7 @@ await test('Page HTTP POST, PUT, DELETE API', async t => {
         })
 
         server.on('request', async (req, res) => {
-            const page = await Page.get(new URL(req.url, `http://${req.headers.host}`), __dirname)
+            const page = await Page.get(getFileFromUrl(req), __dirname)
             try {
                 await page.post(req, res)
             } catch (e) {
@@ -161,7 +161,7 @@ await test('Page HTTP POST, PUT, DELETE API', async t => {
         })
 
         server.on('request', async (req, res) => {
-            const page = await Page.get(new URL(req.url, `http://${req.headers.host}`), __dirname)
+            const page = await Page.get(getFileFromUrl(req), __dirname)
             try {
                 await page.put(req, res)
             } catch (e) {
@@ -197,7 +197,7 @@ await test('Page HTTP POST, PUT, DELETE API', async t => {
         })
 
         server.on('request', async (req, res) => {
-            const page = await Page.get(new URL(req.url, `http://${req.headers.host}`), __dirname)
+            const page = await Page.get(getFileFromUrl(req), __dirname)
             try {
                 await page.delete(req, res)
             } catch (e) {
@@ -233,7 +233,7 @@ await test('Page HTTP POST, PUT, DELETE API', async t => {
         })
 
         server.on('request', async (req, res) => {
-            const page = await Page.get(new URL(req.url, `http://${req.headers.host}`), __dirname)
+            const page = await Page.get(getFileFromUrl(req), __dirname)
             try {
                 await page.get(req, res)
             } catch (e) {
@@ -257,3 +257,9 @@ await test('Page HTTP POST, PUT, DELETE API', async t => {
         assert.match(text, /<\?xml version="1.0" encoding="UTF-8"\?>/)
     })
 })
+
+function getFileFromUrl(req) {
+    const url = new URL(req.url, `http://${req.headers.host}`)
+    const filePath = join(__dirname, url.pathname)
+    return filePath
+}

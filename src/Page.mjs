@@ -1,8 +1,13 @@
 import { UriToStaticFileRoute } from './UriToStaticFileRoute.mjs'
 import { readFileSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, access } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { TemplateLiteralRenderer } from './TemplateLiteralRenderer.mjs'
+
+const EVENTS = {
+    TEMPLATE_RENDERED: 'template rendered',
+    PRE_TEMPLATE_RENDER: 'pre template render'
+}
 
 class Page {
     constructor (rootFolder, filePath, template, renderer) {
@@ -14,32 +19,21 @@ class Page {
         this.renderer = renderer
     }
 
-    static async get(url, rootFolder) {
-        let filePath =  join(rootFolder, url.pathname)
+    static async get(filePath, rootFolder) {
         let template = ''
-        let fileExists = true
 
         try {
             template = await readFile(filePath, 'utf-8')
         } catch (e) {
             console.warn('getting html file', e.message)
-            fileExists = false
-        }
-
-        if (!fileExists) {
-            try {
-                filePath = filePath.replace(/\.(html|xml)$/, '.md')
-                template = await readFile(filePath, 'utf-8')
-                fileExists = true
-            } catch (e) {
-                console.warn('getting markdown file', e.message)
-            }
         }
 
         let module = null
         try {
+            await access(filePath.replace(/\.(html|xml|md)$/, '.mjs'))
             module = await import(filePath.replace(/\.(html|xml|md)$/, '.mjs'))
         } catch (e) {
+            if (e.code === 'ENOENT') return null
             console.warn(e, `${e.message} for ${filePath.replace(/\.(html|xml|md)$/, '.mjs')}`)
         }
         if (!module) return null
@@ -63,6 +57,8 @@ class Page {
     async render (context = {}) {
         context = this.clearBodyFromPreviousRenders(context)
         
+        process.emit(EVENTS.PRE_TEMPLATE_RENDER, this.filePath, this)
+
         // Set context properties to this Page instance so that the API for interacting with the Page is "easy".
         Object.keys(context).reduce((acc, key) => {
             acc[key] = context[key]
@@ -92,6 +88,7 @@ class Page {
             this.route.filePath = this.filePath.replace('.md', '.html')
             this.route.regex = new RegExp(this.route.regex.source.replace('.md', '.html'))
         }
+        process.emit(EVENTS.TEMPLATE_RENDERED, this.route.filePath, this)
 
         return this
     }
@@ -105,5 +102,6 @@ class Page {
 }
 
 export { 
-    Page
+    Page,
+    EVENTS
 }

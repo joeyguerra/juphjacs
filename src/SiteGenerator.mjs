@@ -12,9 +12,7 @@ import { UriToStaticFileRoute } from './UriToStaticFileRoute.mjs'
 import EventEmitter from 'node:events'
 
 const EVENTS = {
-    TEMPLATE_RENDERED: 'template rendered',
     STATIC_SITE_GENERATED: 'static site generated',
-    PRE_TEMPLATE_RENDER: 'pre template render'
 }
 
 class SiteGenerator extends EventEmitter {
@@ -94,10 +92,10 @@ class SiteGenerator extends EventEmitter {
         await mkdir(dirname(newFileName), { recursive: true })
         req.url = `http://newFileName/${relative(this.siteFolder, newFileName)}`
         req.urlParsed = new URL(req.url, `http://${req.headers?.host ?? 'localhost'}`)
-        const page = await Page.get(req.urlParsed, this.pagesFolder)
-        process.emit(EVENTS.PRE_TEMPLATE_RENDER, file, page)
+
+        const page = await Page.get(file, this.rootFolder)
         await page.render()
-        let keyName = resolve(this.rootFolder, page.layout)
+        const keyName = resolve(this.rootFolder, page.layout)
         let key = this.layouts.get(keyName)
         if (!key) {
             this.layouts.set(keyName, new Set())
@@ -146,9 +144,8 @@ class SiteGenerator extends EventEmitter {
                 key.add(resolve(this.rootFolder, file))
             }
         }
-        this.pages.set(newFileName, page)
+        this.pages.set(newFileName.replace(this.siteFolder, ''), page)
         await writeFile(newFileName, page.content)
-        process.emit(EVENTS.TEMPLATE_RENDERED, newFileName, page)
         return page
     }
 }

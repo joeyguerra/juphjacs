@@ -18,7 +18,6 @@ class LoginPage extends Page {
 
     async post(req, res) {
         const { username, password, remember, csrf } = await req.json()
-        console.log('here', username, password, remember, csrf)
 
         if (username === 'admin' && password === 'admin'
             && csrf === this.generatedCsrf) {

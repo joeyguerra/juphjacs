@@ -1,5 +1,5 @@
 
-import { EVENTS } from '../server.mjs'
+import { EVENTS } from '../src/Page.mjs'
 
 class Post {
     constructor(title, date, excerpt, slug, link, published, tags, image, shouldPublish) {
