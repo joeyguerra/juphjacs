@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { TemplateLiteralRenderer } from './TemplateLiteralRenderer.mjs'
 import MarkdownIt from 'markdown-it'
 
@@ -15,10 +16,16 @@ class MarkdownRenderer extends TemplateLiteralRenderer {
         return filePath.endsWith('.md')
     }
 
-    render(content, initialContext = {}) {
-        let data = this.markdown.render(content)
-        let html = super.render(data, initialContext)
-        return html
+    async render(content, initialContext = {}) {
+        let data = ''
+        if (content.startsWith('---')) {
+            const parts = content.split('---')
+            const frontMatter = parts[1].trim()
+            const fn = new Function(`return ${frontMatter}`)
+            Object.assign(initialContext, fn())
+            data = this.markdown.render(parts[2])
+        }
+        return super.render(data, initialContext)
     }
 }
 

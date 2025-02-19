@@ -6,8 +6,9 @@ import assert from 'node:assert/strict'
 
 import { join } from 'node:path'
 import { readFile } from 'node:fs/promises'
+import { SiteGenerator } from '../src/SiteGenerator.mjs'
 
-import { Page } from '../src/Page.mjs'
+import { MarkdownPage } from '../src/MarkdownPage.mjs'
 
 const __dirname = new URL('.', import.meta.url).pathname
 
@@ -20,7 +21,7 @@ await test('Page HTTP API', async t => {
 
         server.on('request', async (req, res) => {
             try {
-                const page = await Page.get(getFileFromUrl(req), __dirname)
+                const page = await SiteGenerator.getPage(getFileFromUrl(req), __dirname)
                 await page.get(req, res)
             } catch (e) {
                 console.error(e)
@@ -53,7 +54,7 @@ await test('Page HTTP API', async t => {
         })
 
         server.on('request', async (req, res) => {
-            const page = await Page.get(getFileFromUrl(req), __dirname)
+            const page = await SiteGenerator.getPage(getFileFromUrl(req), __dirname)
             try {
                 await page.get(req, res)
             } catch (e) {
@@ -87,7 +88,7 @@ await test('Page HTTP API', async t => {
         })
 
         server.on('request', async (req, res) => {
-            const page = await Page.get(getFileFromUrl(req), __dirname)
+            const page = await SiteGenerator.getPage(getFileFromUrl(req), __dirname)
             try {
                 await page.get(req, res)
             } catch (e) {
@@ -121,7 +122,7 @@ await test('Page HTTP POST, PUT, DELETE API', async t => {
         })
 
         server.on('request', async (req, res) => {
-            const page = await Page.get(getFileFromUrl(req), __dirname)
+            const page = await SiteGenerator.getPage(getFileFromUrl(req), __dirname)
             try {
                 await page.post(req, res)
             } catch (e) {
@@ -161,7 +162,7 @@ await test('Page HTTP POST, PUT, DELETE API', async t => {
         })
 
         server.on('request', async (req, res) => {
-            const page = await Page.get(getFileFromUrl(req), __dirname)
+            const page = await SiteGenerator.getPage(getFileFromUrl(req), __dirname)
             try {
                 await page.put(req, res)
             } catch (e) {
@@ -197,7 +198,7 @@ await test('Page HTTP POST, PUT, DELETE API', async t => {
         })
 
         server.on('request', async (req, res) => {
-            const page = await Page.get(getFileFromUrl(req), __dirname)
+            const page = await SiteGenerator.getPage(getFileFromUrl(req), __dirname)
             try {
                 await page.delete(req, res)
             } catch (e) {
@@ -233,7 +234,7 @@ await test('Page HTTP POST, PUT, DELETE API', async t => {
         })
 
         server.on('request', async (req, res) => {
-            const page = await Page.get(getFileFromUrl(req), __dirname)
+            const page = await SiteGenerator.getPage(getFileFromUrl(req), __dirname)
             try {
                 await page.get(req, res)
             } catch (e) {
@@ -256,6 +257,44 @@ await test('Page HTTP POST, PUT, DELETE API', async t => {
         assert.deepEqual(response.status, 200)
         assert.match(text, /<\?xml version="1.0" encoding="UTF-8"\?>/)
     })
+})
+
+await test('Page: Markdown', async t => {
+    await t.test('Render a markdown file', async () => {
+        const server = createServer({
+            IncomingMessage: FetchRequest,
+            ServerResponse: FetchResponse
+        })
+
+        server.on('request', async (req, res) => {
+            try {
+                const filePath = getFileFromUrl(req).replace('.html', '.md')
+                const page = new MarkdownPage(filePath, __dirname, await readFile(filePath, 'utf-8'))
+                await page.get(req, res)
+            } catch (e) {
+                console.error(e)
+                res.end(e.message)
+            }
+        })
+
+        await new Promise((resolve, reject) => {
+            server.listen(0, 'localhost', resolve)
+            server.on('error', reject)
+        })
+        const port = server.address().port
+        const response = await fetch(`http://localhost:${port}/html/markdown.html`)
+
+        await new Promise((resolve, reject) => {
+            server.close(resolve)
+        })
+
+        const text = await response.text()
+        assert.deepEqual(response.status, 200)
+        assert.match(text, /<!DOCTYPE html>/)
+        assert.match(text, /<h1>Test Page for Markdown File<\/h1>/)
+        assert.match(text, /<\/html>/)
+    })
+
 })
 
 function getFileFromUrl(req) {

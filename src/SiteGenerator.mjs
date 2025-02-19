@@ -1,15 +1,20 @@
 import { fileURLToPath } from 'node:url'
 import { dirname, extname, join, relative, resolve } from 'node:path'
-import { opendir, mkdir, readFile, writeFile, cp } from 'node:fs/promises'
+import { opendir, mkdir, readFile, writeFile, cp, access } from 'node:fs/promises'
+import EventEmitter from 'node:events'
+
 import MarkdownIt from 'markdown-it'
 import { TemplateLiteralRenderer } from './TemplateLiteralRenderer.mjs'
-import { MarkdownRenderer } from './MarkdownRenderer.mjs'
 import { XmlRenderer } from './XmlRenderer.mjs'
 import { TemplateRendererFactory } from './TemplateRendererFactory.mjs'
 import { Page } from './Page.mjs'
+import { MarkdownPage } from './MarkdownPage.mjs'
 import { RequestParams } from './RequestParams.mjs'
 import { UriToStaticFileRoute } from './UriToStaticFileRoute.mjs'
-import EventEmitter from 'node:events'
+
+import { Logger } from './Logger.mjs'
+
+const logger = new Logger('SiteGenerator', null, process.env.DEBUG)
 
 const EVENTS = {
     STATIC_SITE_GENERATED: 'static site generated',
@@ -30,9 +35,9 @@ class SiteGenerator extends EventEmitter {
     }
 
     async * readAllFiles (folder) {
-        const dir = await opendir(folder);
+        const dir = await opendir(folder)
         for await (const dirent of dir) {
-            const entryPath = join(folder, dirent.name);
+            const entryPath = join(folder, dirent.name)
             if (dirent.isDirectory()) {
                 yield* this.readAllFiles(entryPath)
             } else {
@@ -61,11 +66,9 @@ class SiteGenerator extends EventEmitter {
     
     async generateStaticSite(req, res) {
         try{await mkdir(this.siteFolder)}catch(e){}
-
-        await this.copyFileFrom(join(this.rootFolder, 'node_modules/morphdom/dist/morphdom-esm.js'), join(this.siteFolder, 'morphdom', 'morphdom-esm.js'))
         
         for await (let file of this.filesToCopyOver) {
-            await this.copyFileFrom(join(this.pagesFolder, file), join(this.siteFolder, file))
+            await this.copyFileFrom(file.from, file.to)
         }
 
         for await (let folder of this.foldersToCopyOver) {
@@ -80,9 +83,51 @@ class SiteGenerator extends EventEmitter {
             let ext = extname(file)
             await this.genFile(file, req, res)
         }
-        process.emit(EVENTS.STATIC_SITE_GENERATED, this.routes, this.layouts)
+        this.emit(EVENTS.STATIC_SITE_GENERATED, this.routes, this.layouts)
     }
 
+    static isMarkdown(file) {
+        return file.endsWith('.md')
+    }
+
+    static async getPage(filePath, rootFolder) {
+        let template = ''
+        try {
+            template = await readFile(filePath, 'utf-8')
+        } catch (e) {
+            if (process.env.DEBUG === 'debug') {
+                if (e.code === 'ENOENT') {
+                    logger.info(`No file found for ${filePath}`)
+                } else {
+                    logger.info(`Reading File: ${e}`)
+                }
+
+            }
+        }
+        
+        let module = null
+        try {
+            await access(filePath.replace(/\.(html|xml|md)$/, '.mjs'))
+            module = await import(filePath.replace(/\.(html|xml|md)$/, '.mjs'))
+        } catch (e) {
+            if (process.env.DEBUG === 'debug') {
+                if (e.code === 'ENOENT') {
+                    logger.info(`No module found for ${filePath.replace(/\.(html|xml|md)$/, '.mjs')}`)
+                } else {
+                    logger.info(`Loading Module: ${e}`)
+                }
+            }
+        }
+    
+        if (!module) {
+            if (SiteGenerator.isMarkdown(filePath)) {
+                return new MarkdownPage(filePath, rootFolder, template)
+            }
+            return new Page(rootFolder, filePath, template, new TemplateLiteralRenderer())
+        }
+        return await module?.default(rootFolder, filePath, template)
+    }
+    
     async genFile(file, req, res) {
         // TODO: This strategy is not robust. It might need to be improved.
         if (file.includes('layout')) return
@@ -90,18 +135,22 @@ class SiteGenerator extends EventEmitter {
         if (!['.md', '.html', '.xml'].includes(ext)) return
         let newFileName = file.replace('.md', '.html').replace(this.pagesFolder, this.siteFolder)
         await mkdir(dirname(newFileName), { recursive: true })
-        req.url = `http://newFileName/${relative(this.siteFolder, newFileName)}`
+        req.url = `http://localhost/${relative(this.siteFolder, newFileName)}`
         req.urlParsed = new URL(req.url, `http://${req.headers?.host ?? 'localhost'}`)
 
-        const page = await Page.get(file, this.rootFolder)
+        const page = await SiteGenerator.getPage(file, this.rootFolder)
+
         await page.render()
-        const keyName = resolve(this.rootFolder, page.layout)
-        let key = this.layouts.get(keyName)
-        if (!key) {
-            this.layouts.set(keyName, new Set())
-            key = this.layouts.get(keyName)
+
+        if (page.layout) {
+            const keyName = resolve(this.rootFolder, page.layout)
+            let key = this.layouts.get(keyName)
+            if (!key) {
+                this.layouts.set(keyName, new Set())
+                key = this.layouts.get(keyName)
+            }
+            key.add(resolve(this.rootFolder, file))    
         }
-        key.add(resolve(this.rootFolder, file))
 
         const importRegex = /import\s+{[^}]+}\s+from\s+['"]([^'"]+\.mjs)['"]/g
         if (page.content.includes('import') || page.content.includes('require')) {

@@ -36,7 +36,20 @@ const CONTENT_TYPE = {
     xml: 'application/xml'
 }
 const middlewares = new Set()
-const filesToCopyOver = Array.from(['favicon.ico', 'robots.txt'])
+const filesToCopyOver = Array.from([
+    {
+        from: join(PAGES, 'favicon.ico'),
+        to: join(SITE_FOLDER, 'favicon.ico')
+    }, 
+    {
+        from: join(PAGES, 'robots.txt'),
+        to: join(SITE_FOLDER, 'robots.txt')
+    },
+    {
+        from: join(__dirname, 'node_modules/morphdom/dist/morphdom-esm.js'),
+        to: join(SITE_FOLDER, 'js/morphdom-esm.js')
+    }
+])
 const foldersToCopyOver = Array.from(['js', 'css', 'images'])
 const siteGenerator = new SiteGenerator(__dirname, PAGES, SITE_FOLDER, filesToCopyOver, foldersToCopyOver)
 
@@ -211,18 +224,21 @@ async function main (server, execute) {
                     return res.end('Not found')
                 }
             } catch (e) {
-                logger.error(`${e.message} for ${req.urlParsed.pathname} in ${SITE_FOLDER}`)
+                logger.error(`Serving file: ${e.message} for ${req.urlParsed.pathname} in ${SITE_FOLDER}`)
             }
         }
 
         try {
-            const existing = siteGenerator.pages.values().find(page => page.route.filePath.includes(req.urlParsed.pathname))
+            const existing = siteGenerator.pages.values().find(page => {
+                return page.route.filePath.includes(req.urlParsed.pathname)
+            })
+
             let filePath = join(PAGES, req.urlParsed.pathname)
             if (existing) {
                 filePath = existing.filePath
             }
             
-            const page = await Page.get(filePath, PAGES)
+            const page = await SiteGenerator.getPage(filePath, PAGES)
     
             if (!existing) {
                 res.statusCode = 404
@@ -237,10 +253,10 @@ async function main (server, execute) {
                 res.end(page.content)
             }
         } catch (e) {
-            logger.error(`${e.message} for ${req.urlParsed.pathname} in ${PAGES}`)
+            logger.error(`Loading Page: ${e.message} for ${req.urlParsed.pathname} in ${PAGES}`)
             res.statusCode = 500
             res.end('Internal server error')
-    }
+        }
     })
 
     await siteGenerator.generateStaticSite(req, res)

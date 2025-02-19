@@ -19,27 +19,6 @@ class Page {
         this.renderer = renderer
     }
 
-    static async get(filePath, rootFolder) {
-        let template = ''
-
-        try {
-            template = await readFile(filePath, 'utf-8')
-        } catch (e) {
-            console.warn('getting html file', e.message)
-        }
-
-        let module = null
-        try {
-            await access(filePath.replace(/\.(html|xml|md)$/, '.mjs'))
-            module = await import(filePath.replace(/\.(html|xml|md)$/, '.mjs'))
-        } catch (e) {
-            if (e.code === 'ENOENT') return null
-            console.warn(e, `${e.message} for ${filePath.replace(/\.(html|xml|md)$/, '.mjs')}`)
-        }
-        if (!module) return null
-        return await module?.default(rootFolder, filePath, template)
-    }
-
     async include (filePath) {
         filePath = join(this.rootFolder, filePath)
         const template = await readFile(filePath, 'utf-8')
