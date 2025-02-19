@@ -5,8 +5,8 @@ import { UriToStaticFileRoute } from './UriToStaticFileRoute.mjs'
 
 class MarkdownPage extends Page {
     constructor (filePath, rootFolder, template) {
-        const renderer = new MarkdownRenderer()
-        super(rootFolder, filePath, template, renderer)
+        super(rootFolder, filePath, template)
+        this.renderer = new MarkdownRenderer()
     }
 
     async get(req, res) {
@@ -21,7 +21,8 @@ class MarkdownPage extends Page {
         
         this.content = await this.renderer.render(content, this)
         if (this.layout) {
-            const layout = new Page(this.rootFolder, this.layout, this.template, this.renderer)
+            const layout = new Page(this.rootFolder, this.layout, this.template)
+            layout.renderer = this.renderer
             await layout.render()
             this.content = layout.content
         }

@@ -3,12 +3,8 @@ import { dirname, extname, join, relative, resolve } from 'node:path'
 import { opendir, mkdir, readFile, writeFile, cp, access } from 'node:fs/promises'
 import EventEmitter from 'node:events'
 
-import MarkdownIt from 'markdown-it'
-import { TemplateLiteralRenderer } from './TemplateLiteralRenderer.mjs'
-import { XmlRenderer } from './XmlRenderer.mjs'
 import { Page } from './Page.mjs'
 import { MarkdownPage } from './MarkdownPage.mjs'
-import { RequestParams } from './RequestParams.mjs'
 import { UriToStaticFileRoute } from './UriToStaticFileRoute.mjs'
 
 import { Logger } from './Logger.mjs'
@@ -44,6 +40,7 @@ class SiteGenerator extends EventEmitter {
             }
         }
     }
+
     async copyFoldersFrom(source, destination) {
         const dir = await opendir(source)
         for await (let folder of dir) {
@@ -54,7 +51,7 @@ class SiteGenerator extends EventEmitter {
             }
         }
     }
-    
+
     async copyFileFrom(file, destination) {
         try {
             await cp(file, destination, { recursive: true })
@@ -62,7 +59,7 @@ class SiteGenerator extends EventEmitter {
             this.emit('error', e)
         }
     }
-    
+
     async generateStaticSite(req, res) {
         try{await mkdir(this.siteFolder)}catch(e){}
         
@@ -122,7 +119,7 @@ class SiteGenerator extends EventEmitter {
             if (SiteGenerator.isMarkdown(filePath)) {
                 return new MarkdownPage(filePath, rootFolder, template)
             }
-            return new Page(rootFolder, filePath, template, new TemplateLiteralRenderer())
+            return new Page(rootFolder, filePath, template)
         }
         return await module?.default(rootFolder, filePath, template)
     }

@@ -10,13 +10,13 @@ const EVENTS = {
 }
 
 class Page {
-    constructor (rootFolder, filePath, template, renderer) {
+    constructor (rootFolder, filePath, template) {
         this.rootFolder = rootFolder
         this.filePath = filePath
         this.template = template
         this.content = null
         this.contentType = 'text/html'
-        this.renderer = renderer
+        this.renderer = new TemplateLiteralRenderer()
     }
 
     async include (filePath) {

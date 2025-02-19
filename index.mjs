@@ -20,7 +20,7 @@ const PACKAGE_NAME = `${pkg.name}:server`
 const ringBuffer = new RingBuffer(100)
 
 const logger = new Logger(pkg.name, ringBuffer, DEBUG)
-const __dirname = dirname(fileURLToPath(import.meta.url))
+const __dirname = dirname(fileURLToPath(import.meta.url)).replace('node_modules/juphjacs', '')
 
 const options = {
     pages: {
@@ -300,8 +300,8 @@ export {
     main,
     logger,
     EVENTS,
+    ringBuffer,
     FetchRequest,
     FetchResponse,
     SiteGenerator,
-    ringBuffer
 }
