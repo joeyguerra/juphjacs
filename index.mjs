@@ -299,5 +299,9 @@ async function main (server, execute) {
 export {
     main,
     logger,
-    EVENTS
+    EVENTS,
+    FetchRequest,
+    FetchResponse,
+    SiteGenerator,
+    ringBuffer
 }
