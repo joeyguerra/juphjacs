@@ -1,18 +1,15 @@
 class TemplateLiteralRenderer {
-    constructor (resolve, readFile) {
-        this.resolve = resolve
-        this.readFile = readFile
-    }
+    constructor () {}
 
     accepts (filePath) {
         return filePath.endsWith('.html')
     }
 
-    render(content, context = {}) {
+    async render(content, context = {}) {
         let body = this.escapeScriptBackticks(content)
         try {
-            const template = new Function('context', `with (context) { return \`${body}\` }`)
-            body = template(context)
+            const asyncTemplate = new Function('context', `with (context) { return (async () => \`${body}\`)() }`)
+            body = await asyncTemplate(context)
         } catch (e) {
             throw e
         } finally {

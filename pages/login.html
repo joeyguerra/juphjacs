@@ -4,7 +4,7 @@
     }
 </style>
 <h2>Login</h2>
-<form method="post" enctype="application/x-www-form-urlencoded">
+<form action="login.html" method="post" enctype="application/x-www-form-urlencoded">
     <label for="username">Username:</label>
     <input type="text" id="username" name="username" required><br><br>
     <label for="password">Password:</label>
@@ -13,4 +13,4 @@
     <input type="hidden" name="csrf" value="${generatedCsrf}">
     <button type="submit">Login</button>
 </form>
-${includeIf('./pages/error.html', error)}
+${await includeIf('error.html', error)}

@@ -1,6 +1,21 @@
-export default {
-    route: new RegExp('^/blog/?$'),
-    layout: 'pages/blog/layout.html',
-    title: 'The Blog',
-    postsSet: new Set()
+
+import { Page } from '../../src/Page.mjs'
+import { TemplateLiteralRenderer } from '../../src/TemplateLiteralRenderer.mjs'
+
+class BlogIndexPage extends Page {
+    constructor (rootFolder, filePath, template) {
+        super(rootFolder, filePath, template, new TemplateLiteralRenderer())
+        this.title = 'The Blog'
+        this.layout = './pages/blog/layout.html'
+        this.postsSet = new Set()
+    }
+    
+    async get (req, res) {
+        await this.render()
+        res.end(this.content)
+    }
+}
+
+export default async (rootFolder, filePath, template) => {
+    return new BlogIndexPage(rootFolder, filePath, template)
 }

@@ -1,8 +1,7 @@
 <ul>
     <li>size: ${upload.size}</li>
-    <li>type: ${upload.type}</li>
-    <li>name: ${upload.name}</li>
+    <li>name: ${upload.filename}</li>
 </ul>
 <div>
-    ${upload.content}
+    ${await upload.text()}
 </div>

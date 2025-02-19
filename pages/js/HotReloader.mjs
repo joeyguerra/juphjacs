@@ -1,5 +1,5 @@
 import io from '/socket.io/socket.io.esm.min.js'
-import morphdom from '/morphdom/morphdom-esm.js'
+import morphdom from '/js/morphdom-esm.js'
 const morphdomOptions = {
     onNodeAdded (node) {
         if (node.nodeName === 'SCRIPT' && node.id !== 'HotReloader') {

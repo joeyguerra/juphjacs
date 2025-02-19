@@ -1,5 +1,5 @@
 
-import { EVENTS } from '../server.mjs'
+import { EVENTS } from '../src/Page.mjs'
 
 class Post {
     constructor(title, date, excerpt, slug, link, published, tags, image, shouldPublish) {
@@ -20,12 +20,12 @@ const posts = new Set()
 export default async () => {
     const blogIndex = {
         filePath: '',
-        page: {posts: []}
+        page: {posts: []},
+        context: {}
     }
     process.on(EVENTS.TEMPLATE_RENDERED, async (filePath, page) => {
         if (filePath.includes('/blog/index.html')) {
             blogIndex.filePath = filePath
-            blogIndex.context = {}
             Object.keys(page).forEach(key => {
                 blogIndex.context[key] = page[key]
             })
@@ -43,9 +43,9 @@ export default async () => {
         }
     })
 
-    process.on(EVENTS.PRE_TEMPLATE_RENDER, async (filePath, initialContext, content) => {
+    process.on(EVENTS.PRE_TEMPLATE_RENDER, async (filePath, page) => {
         if (filePath.includes('/blog/index.html')) {
-            initialContext.postsSet = posts
+            page.postsSet = posts
         }
     })
 }

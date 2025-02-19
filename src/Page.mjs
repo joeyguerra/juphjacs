@@ -1,54 +1,54 @@
 import { UriToStaticFileRoute } from './UriToStaticFileRoute.mjs'
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readFile, access } from 'node:fs/promises'
+import { resolve, join } from 'node:path'
+import { TemplateLiteralRenderer } from './TemplateLiteralRenderer.mjs'
+
+const EVENTS = {
+    TEMPLATE_RENDERED: 'template rendered',
+    PRE_TEMPLATE_RENDER: 'pre template render'
+}
 
 class Page {
-    constructor (rootFolder, filePath, template, rendererFactory, readFile) {
+    constructor (rootFolder, filePath, template, renderer) {
         this.rootFolder = rootFolder
         this.filePath = filePath
         this.template = template
-        this.output = null
-        this.rendererFactory = rendererFactory
+        this.content = null
         this.contentType = 'text/html'
-        this.readFile = readFile
-        this.renderer = null
+        this.renderer = renderer
     }
-    include (filePath) {
-        const data = readFileSync(filePath, 'utf-8')
-        return this.renderer.render(data, this)
+
+    async include (filePath) {
+        filePath = join(this.rootFolder, filePath)
+        const template = await readFile(filePath, 'utf-8')
+        const module = await import(filePath.replace(/\.(html|xml)$/, '.mjs'))
+        const page = await module.default(this.rootFolder, filePath, template)
+        Object.assign(page, this)
+        return await this.renderer.render(template, this)
     }
-    includeIf (filePath, condition) {
+    async includeIf (filePath, condition) {
         if (condition) {
-            return this.include(filePath)
+            return await this.include(filePath)
         }
         return ''
     }
-    async render (context) {
-        const { renderer, context: defaultContext} = await this.rendererFactory.get(this.filePath)
-        this.renderer = renderer
-
-        if (!this.renderer) {
-            return null
-        }
-
-        // If there is a default context, merge it with the context passed in
-        if (defaultContext) {
-            context = Object.assign({}, defaultContext, context)
-        }
-        
+    async render (context = {}) {
         context = this.clearBodyFromPreviousRenders(context)
         
+        process.emit(EVENTS.PRE_TEMPLATE_RENDER, this.filePath, this)
+
         // Set context properties to this Page instance so that the API for interacting with the Page is "easy".
         Object.keys(context).reduce((acc, key) => {
             acc[key] = context[key]
             return acc
         }, this)
 
-        this.output = this.renderer.render(this.template, this)
+        this.content = await this.renderer.render(this.template, this)
         if (this.layout) {
             this.layout = resolve(this.layout)
-            const layoutHtml = await this.readFile(this.layout, 'utf-8')
-            this.output = this.renderer.render(layoutHtml, { body: this.output, ...this })
+            const layoutHtml = await readFile(this.layout, 'utf-8')
+            this.content = await (new TemplateLiteralRenderer()).render(layoutHtml, { body: this.content, ...this })
         }
 
         if (this.route && this.route.test && !(this.route instanceof UriToStaticFileRoute)) {
@@ -65,7 +65,9 @@ class Page {
 
         if (this.filePath.endsWith('.md')) {
             this.route.filePath = this.filePath.replace('.md', '.html')
+            this.route.regex = new RegExp(this.route.regex.source.replace('.md', '.html'))
         }
+        process.emit(EVENTS.TEMPLATE_RENDERED, this.route.filePath, this)
 
         return this
     }
@@ -79,5 +81,6 @@ class Page {
 }
 
 export { 
-    Page
+    Page,
+    EVENTS
 }

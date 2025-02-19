@@ -5,7 +5,7 @@ class RequestBodyParser {
         this.request = request
     }
     
-    parse() {
+    async parse() {
         return new Promise((resolve, reject) => {
             let body = Buffer.alloc(0)
             const contentType = this.request.headers['content-type']
@@ -42,7 +42,7 @@ class RequestBodyParser {
                 }
             })
     
-            this.request.on('error', (err) => reject(err))
+            this.request.on('error', reject)
         })
     }
 
@@ -89,7 +89,17 @@ class RequestBodyParser {
                 result.files[fieldName] = {
                     filename,
                     mimetype: contentType,
-                    stream: fileStream
+                    stream: fileStream,
+                    get size () {
+                        return content.length
+                    },
+                    async text() {
+                        const chunks = []
+                        for await (const chunk of fileStream) {
+                            chunks.push(chunk)
+                        }
+                        return Buffer.concat(chunks).toString()
+                    }
                 }
             } else {
                 result.fields[fieldName] = content.toString().replace(/\r\n$/, '')
