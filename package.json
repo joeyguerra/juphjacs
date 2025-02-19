@@ -2,7 +2,7 @@
   "name": "juphjacs",
   "version": "1.0.0",
   "description": "A simple web site builder. Just use plain html, javascript and css; stupid.",
-  "main": "server.mjs",
+  "main": "index.mjs",
   "type": "module",
   "files": [
     "src",
@@ -15,7 +15,7 @@
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test",
-    "start:local": "DEBUG=debug node --watch server.mjs"
+    "start:local": "node --env-file=.env --watch server.mjs"
   },
   "keywords": [
     "web",
