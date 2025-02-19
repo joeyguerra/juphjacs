@@ -8,9 +8,7 @@
     "src",
     "pages/index.html",
     "pages/index.mjs",
-    "pages/layout.html",
-    "pages/layout.mjs",
-    "pages/js/HotReloader.mjs"
+    "pages/layout.html"
   ],
   "scripts": {
     "start": "node server.mjs",
