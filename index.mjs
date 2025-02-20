@@ -20,16 +20,17 @@ const PACKAGE_NAME = `${pkg.name}:server`
 const ringBuffer = new RingBuffer(100)
 
 const logger = new Logger(pkg.name, ringBuffer, DEBUG)
-const __dirname = dirname(fileURLToPath(import.meta.url)).replace('node_modules/juphjacs', '')
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const rootFolder = process.cwd()
 
 const options = {
     pages: {
         type: 'string',
-        default: join(__dirname, 'pages')
+        default: join(rootFolder, 'pages')
     },
     'site-folder': {
         type: 'string',
-        default: join(__dirname, '_site')
+        default: join(rootFolder, '_site')
     },
     resources: {
         type: 'string',
@@ -69,7 +70,7 @@ const filesToCopyOver = Array.from([
     }
 ])
 
-const siteGenerator = new SiteGenerator(__dirname, PAGES, SITE_FOLDER, filesToCopyOver, foldersToCopyOver)
+const siteGenerator = new SiteGenerator(rootFolder, PAGES, SITE_FOLDER, filesToCopyOver, foldersToCopyOver)
 
 siteGenerator.on('error', e => logger.error(e, 'error in site generator'))
 
@@ -94,7 +95,7 @@ function ifSlashAddIndex(pathname) {
 }
 
 async function * loadPlugins() {
-    for await (const file of await opendir(join(__dirname, 'plugins'))) {
+    for await (const file of await opendir(join(rootFolder, 'plugins'))) {
         if (file.isDirectory()) continue
         if (extname(file.name) !== '.mjs') continue
         yield await import(join(file.parentPath, file.name))
@@ -102,7 +103,7 @@ async function * loadPlugins() {
 }
 
 async function * loadMiddlewares() {
-    for await (const file of await opendir(join(__dirname, 'middlewares'))) {
+    for await (const file of await opendir(join(rootFolder, 'middlewares'))) {
         if (file.isDirectory()) continue
         if (extname(file.name) !== '.mjs') continue
         yield await import(join(file.parentPath, file.name))
@@ -217,7 +218,7 @@ async function main (server, execute) {
 
         if (req.urlParsed.pathname === '/js/morphdom-esm.js') {
             res.setHeader('Content-Type', 'text/javascript')    
-            return createReadStream(join(__dirname, 'node_modules/morphdom/dist/morphdom-esm.js')).pipe(res)
+            return createReadStream(join(rootFolder, 'node_modules/morphdom/dist/morphdom-esm.js')).pipe(res)
         }
 
         if (req.urlParsed.pathname === '/js/HotReloader.mjs') {
