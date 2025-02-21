@@ -4,8 +4,8 @@ import { MarkdownRenderer } from './MarkdownRenderer.mjs'
 import { UriToStaticFileRoute } from './UriToStaticFileRoute.mjs'
 
 class MarkdownPage extends Page {
-    constructor (filePath, rootFolder, template) {
-        super(rootFolder, filePath, template)
+    constructor (filePath, pagesFolder, template) {
+        super(pagesFolder, filePath, template)
         this.renderer = new MarkdownRenderer()
     }
 
@@ -21,21 +21,21 @@ class MarkdownPage extends Page {
         
         this.content = await this.renderer.render(content, this)
         if (this.layout) {
-            const layout = new Page(this.rootFolder, this.layout, this.template)
+            const layout = new Page(this.pagesFolder, this.layout, this.template)
             layout.renderer = this.renderer
             await layout.render()
             this.content = layout.content
         }
         const htmlFilePath = this.filePath.replace('.md', '.html')
-        this.route = new UriToStaticFileRoute(htmlFilePath.replace(this.rootFolder, ''), htmlFilePath)
+        this.route = new UriToStaticFileRoute(htmlFilePath.replace(this.pagesFolder, ''), htmlFilePath)
         process.emit(EVENTS.TEMPLATE_RENDERED, this.route.filePath, this)
         
         return this.content
     }
 }
 
-export default async (filePath, rootFolder, template) => {
-    return new MarkdownPage(filePath, rootFolder, template)
+export default async (filePath, pagesFolder, template) => {
+    return new MarkdownPage(filePath, pagesFolder, template)
 }
 
 export {

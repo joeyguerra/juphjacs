@@ -10,8 +10,8 @@ const EVENTS = {
 }
 
 class Page {
-    constructor (rootFolder, filePath, template) {
-        this.rootFolder = rootFolder
+    constructor (pagesFolder, filePath, template) {
+        this.pagesFolder = pagesFolder
         this.filePath = filePath
         this.template = template
         this.content = null
@@ -20,10 +20,10 @@ class Page {
     }
 
     async include (filePath) {
-        filePath = join(this.rootFolder, filePath)
+        filePath = join(this.pagesFolder, filePath)
         const template = await readFile(filePath, 'utf-8')
         const module = await import(filePath.replace(/\.(html|xml)$/, '.mjs'))
-        const page = await module.default(this.rootFolder, filePath, template)
+        const page = await module.default(this.pagesFolder, filePath, template)
         Object.assign(page, this)
         return await this.renderer.render(template, this)
     }
@@ -56,7 +56,7 @@ class Page {
         }
 
         if (!this.route) {
-            this.route = new UriToStaticFileRoute(this.filePath.replace(this.rootFolder, '').replace(/\\/g, '/'), this.filePath)
+            this.route = new UriToStaticFileRoute(this.filePath.replace(this.pagesFolder, '').replace(/\\/g, '/'), this.filePath)
         }
 
         if (typeof(this.route) === 'string') {

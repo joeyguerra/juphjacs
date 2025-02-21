@@ -35,6 +35,10 @@ const options = {
     resources: {
         type: 'string',
         default: 'css,js,images'
+    },
+    execute: {
+        type: 'boolean',
+        default: false
     }
 }
 
@@ -42,7 +46,8 @@ const parsedArgs = parseArgs({ options, args: argv.slice(2) })
 
 const PAGES = process.env.PAGES ?? parsedArgs.values.pages
 const SITE_FOLDER = process.env.SITE_FOLDER ?? parsedArgs.values['site-folder']
-const foldersToCopyOver = process.env.RESOURCES ?? parsedArgs.values.resources.split(',').map(folder => folder.trim())
+const foldersToCopyOver = process.env.RESOURCES?.split(',').map(f => f.trim()) ?? parsedArgs.values.resources.split(',').map(folder => folder.trim())
+const EXECUTE = process.env.EXECUTE ?? parsedArgs.values.execute
 
 const CONTENT_TYPE = {
     css: 'text/css',
@@ -147,13 +152,13 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, clients) {
     }
 }
 
-async function main (server, execute) {
+async function main (server) {
     try {
         for await (const plugin of loadPlugins()) {
             await plugin.default()
         }
     } catch (e) {
-        logger.warn(e)
+        logger.warn(`Error loading plugins: ${e.message}`)
     }
 
     try {
@@ -258,7 +263,7 @@ async function main (server, execute) {
 
         try {
             const existing = siteGenerator.pages.values().find(page => {
-                return page.route.filePath.includes(req.urlParsed.pathname)
+                return page.route.test(req.urlParsed.pathname)
             })
 
             let filePath = join(PAGES, req.urlParsed.pathname)
@@ -295,6 +300,10 @@ async function main (server, execute) {
             await broadcast(filePath, relativePath, hotReloadNamespace, clients)
         })
     })
+
+    if (EXECUTE) {
+        process.exit()
+    }
 }
 
 export {

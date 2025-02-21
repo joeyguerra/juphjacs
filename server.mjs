@@ -7,14 +7,8 @@ const server = createServer({
     ServerResponse: FetchResponse
 })
 
-const args = process.argv.reduce((acc, current, i, items) => {
-    if (current === '--execute') {
-        acc.execute = items[i + 1]
-    }
-    return acc
-}, {execute: null})
 
-await main(server, args.execute)
+await main(server)
 
 server.listen(process.env.PORT ?? 3000, () => {
     logger.info(`Server running at http://localhost:${server.address().port}/`)

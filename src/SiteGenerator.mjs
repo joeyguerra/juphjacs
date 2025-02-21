@@ -1,11 +1,10 @@
 import { fileURLToPath } from 'node:url'
 import { dirname, extname, join, relative, resolve } from 'node:path'
-import { opendir, mkdir, readFile, writeFile, cp, access } from 'node:fs/promises'
+import { opendir, mkdir, readFile, writeFile, cp, access, stat } from 'node:fs/promises'
 import EventEmitter from 'node:events'
 
 import { Page } from './Page.mjs'
 import { MarkdownPage } from './MarkdownPage.mjs'
-import { UriToStaticFileRoute } from './UriToStaticFileRoute.mjs'
 
 import { Logger } from './Logger.mjs'
 
@@ -69,7 +68,7 @@ class SiteGenerator extends EventEmitter {
 
         for await (let folder of this.foldersToCopyOver) {
             try{
-                await mkdir(join(this.pagesFolder, folder), { recursive: true })
+                await mkdir(join(this.siteFolder, folder), { recursive: true })
             } catch (e) {
                 this.emit('warn', e)
             }
@@ -86,7 +85,7 @@ class SiteGenerator extends EventEmitter {
         return file.endsWith('.md')
     }
 
-    static async getPage(filePath, rootFolder) {
+    static async getPage(filePath, pagesFolder) {
         let template = ''
         try {
             template = await readFile(filePath, 'utf-8')
@@ -103,7 +102,10 @@ class SiteGenerator extends EventEmitter {
         
         let module = null
         try {
-            await access(filePath.replace(/\.(html|xml|md)$/, '.mjs'))
+            const stats = await stat(filePath.replace(/\.(html|xml|md)$/, '.mjs'))
+            if (stats.isDirectory()) {
+                return null
+            }
             module = await import(filePath.replace(/\.(html|xml|md)$/, '.mjs'))
         } catch (e) {
             if (process.env.DEBUG === 'debug') {
@@ -114,14 +116,15 @@ class SiteGenerator extends EventEmitter {
                 }
             }
         }
-    
+
         if (!module) {
             if (SiteGenerator.isMarkdown(filePath)) {
-                return new MarkdownPage(filePath, rootFolder, template)
+                return new MarkdownPage(filePath, pagesFolder, template)
             }
-            return new Page(rootFolder, filePath, template)
+            return new Page(pagesFolder, filePath, template)
         }
-        return await module?.default(rootFolder, filePath, template)
+
+        return await module?.default(pagesFolder, filePath, template)
     }
     
     async genFile(file, req, res) {
@@ -134,18 +137,17 @@ class SiteGenerator extends EventEmitter {
         req.url = `http://localhost/${relative(this.siteFolder, newFileName)}`
         req.urlParsed = new URL(req.url, `http://${req.headers?.host ?? 'localhost'}`)
 
-        const page = await SiteGenerator.getPage(file, this.rootFolder)
-
+        const page = await SiteGenerator.getPage(file, this.pagesFolder)
         await page.render()
 
         if (page.layout) {
-            const keyName = resolve(this.rootFolder, page.layout)
+            const keyName = resolve(this.pagesFolder, page.layout)
             let key = this.layouts.get(keyName)
             if (!key) {
                 this.layouts.set(keyName, new Set())
                 key = this.layouts.get(keyName)
             }
-            key.add(resolve(this.rootFolder, file))    
+            key.add(resolve(this.pagesFolder, file))    
         }
 
         const importRegex = /import\s+{[^}]+}\s+from\s+['"]([^'"]+\.mjs)['"]/g
@@ -158,7 +160,7 @@ class SiteGenerator extends EventEmitter {
                     this.localImports.set(keyName, new Set())
                     key = this.localImports.get(keyName)
                 }
-                key.add(resolve(this.rootFolder, file))
+                key.add(resolve(this.pagesFolder, file))
             }
         }
 
@@ -172,7 +174,7 @@ class SiteGenerator extends EventEmitter {
                     this.localImports.set(keyName, new Set())
                     key = this.localImports.get(keyName)
                 }
-                key.add(resolve(this.rootFolder, file))
+                key.add(resolve(this.pagesFolder, file))
             }
         }
 
@@ -186,7 +188,7 @@ class SiteGenerator extends EventEmitter {
                     this.localImports.set(keyName, new Set())
                     key = this.localImports.get(keyName)
                 }
-                key.add(resolve(this.rootFolder, file))
+                key.add(resolve(this.pagesFolder, file))
             }
         }
         this.pages.set(newFileName.replace(this.siteFolder, ''), page)
