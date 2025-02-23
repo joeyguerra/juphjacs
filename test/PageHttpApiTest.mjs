@@ -13,7 +13,7 @@ import { MarkdownPage } from '../src/MarkdownPage.mjs'
 const __dirname = new URL('.', import.meta.url).pathname
 
 await test('Page HTTP API', async t => {
-    await t.test('Return a Page', async () => {
+    await t.test('GET Return a Page', async () => {
         const server = createServer({
             IncomingMessage: FetchRequest,
             ServerResponse: FetchResponse
@@ -113,6 +113,42 @@ await test('Page HTTP API', async t => {
     })
 })
 
+await test('Cookie', async t => {
+    await t.test('Can set a cookie and render value in markup', async () => {
+        const server = createServer({
+            IncomingMessage: FetchRequest,
+            ServerResponse: FetchResponse
+        })
+
+        server.on('request', async (req, res) => {
+            const page = await SiteGenerator.getPage(getFileFromUrl(req), __dirname)
+            try {
+                await page.get(req, res)
+            } catch (e) {
+                console.error(e)
+                res.end(e.message)
+            }
+        })
+
+        await new Promise((resolve, reject) => {
+            server.listen(0, 'localhost', resolve)
+            server.on('error', reject)
+        })
+        const port = server.address().port
+        const response = await fetch(`http://localhost:${port}/html/cookie.html`, {
+            headers: {
+                Cookie: 'theme=dark'
+            }
+        })
+        await new Promise((resolve, reject) => {
+            server.close(resolve)
+        })
+        const text = await response.text()
+        assert.deepEqual(response.status, 200)
+        assert.match(text, /theme: dark/)
+    })
+
+})
 
 await test('Page HTTP POST, PUT, DELETE API', async t => {
     await t.test('Can handle a POST request', async () => {

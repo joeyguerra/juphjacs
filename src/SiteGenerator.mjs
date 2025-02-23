@@ -96,7 +96,7 @@ class SiteGenerator extends EventEmitter {
                 } else {
                     logger.info(`Reading File: ${e}`)
                 }
-
+                
             }
         }
         
@@ -116,7 +116,7 @@ class SiteGenerator extends EventEmitter {
                 }
             }
         }
-
+        
         if (!module) {
             if (SiteGenerator.isMarkdown(filePath)) {
                 return new MarkdownPage(filePath, pagesFolder, template)
