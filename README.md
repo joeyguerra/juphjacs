@@ -12,12 +12,37 @@
 
 ## A web site framework
 
-Create websites with near-real-time feedback with your code to the left (or right) and a browser to the right (or left). As you edit the code, the page updates, reflecting the changes.
+Create websites with fast feedback with your code to the left (or right) and a browser to the right (or left). As you edit the code, the page updates, reflecting the changes (Hot Reload).
 
 - Use HTML or Markdown documents.
 - Write vanilla Javascript and CSS.
 - Generates a static site under `_site`.
-- If there's a `.mjs` file at the same level as the `.html/.md` file and it exports a default object with `get | post | put |delete | head | options | trace`, with a `route`, than that method gets executed before the `.html/.md` file is rendered and served.
+- If there's a `.mjs` file at the same level as the `.html/.md` file and it exports a default function, it will be `imported` and any defined HTTP methods will be called during the request pipeline. In addition, the `Page` object will be the context when rendered in the template. So instance properties can be referenced in the HTML file. `TemplateLiteralRenderer` renders string literals like `${title}` in the HTML content.
+
+```javascript
+import { Page } from '../../src/Page.mjs'
+import { TemplateLiteralRenderer } from '../../src/TemplateLiteralRenderer.mjs'
+
+class APage extends Page {
+      constructor (rootFolder, filePath, template) {
+            super(rootFolder, filePath, template, new TemplateLiteralRenderer())
+            this.title = 'An example page'
+            this.layout = './pages/layout.html'
+      }
+      async get (req, res) {
+            const url = new URL(req.url, 'http://localhost')
+            this.id = url.searchParams.get('id')      
+            await this.render()
+            res.setHeader('Content-Type', 'text/html')
+            res.end(this.content)
+      }
+}
+
+export default async (rootFolder, filePath, template) => {
+      return new APage(rootFolder, filePath, template)
+}
+```
+
 - A WebSocket connection is opened and all file changes trigger a page to be re-rendered, set to the browser, where `morphdom` hot-reloads the DOM.
 
 The name is a play on the KISS Principle (Keep It Simple Stupid). It's super hard to keep things simple, the name is a reminder to keep trying.
@@ -36,7 +61,7 @@ The name is a play on the KISS Principle (Keep It Simple Stupid). It's super har
 
 # Use
 
-Use the latest version of [Node.js](https://nodejs.org). As of writing, it's `v23.6.1`.
+Use the latest version of [Node.js](https://nodejs.org). As of writing, it's `v23.8.0`.
 
 ```sh
 npm i
@@ -77,30 +102,30 @@ A page consists of an HTML and a `.mjs` javascript file with the same name. e.g.
 
 ```js
 // index.mjs
-export default {
-      title: 'Home Page',
-      route: /^index.html/,
-      get(request) {
-            return new Response('ok')
-      },
-      post(request) {
-            return new Response('created', 201)
-      }
+import { Page } from '../../src/Page.mjs'
+import { TemplateLiteralRenderer } from '../../src/TemplateLiteralRenderer.mjs'
+
+class IndexPage extends Page {
+    constructor (rootFolder, filePath, template) {
+        super(rootFolder, filePath, template, new TemplateLiteralRenderer())
+        this.title = 'Main page'
+        this.layout = './test/html/layout.html'
+    }
+    async get (req, res) {
+        await this.render()
+        res.end(this.content)
+    }
+}
+export default async (rootFolder, filePath, template) => {
+    return new IndexPage(rootFolder, filePath, template)
 }
 ```
 
-If methods named after the HTTP methods are defined in the context object, they will be executed if the route matches (`route.match(url.pathname)`) the `IncomingMessage` URL. Just as long as the `route` property has a method called `match` on it, it'll work. Doesn't have to be a RegExp. Just has to have a `match` method that returns `truthy`.
+If methods named after the HTTP methods are defined in the Page object, they will be executed if the URI is for that html file.
 
 ## Layouts
 
 Define a layout for the HTML page by including a `layout` property in the module. The `layout.html` file has a to have `${body}` in it for the page to render into.
-
-```js
-// index.mjs
-export default {
-      layout: 'pages/layout.html'
-}
-```
 
 # Architecture
 
