@@ -25,6 +25,7 @@ class SiteGenerator extends EventEmitter {
         this.siteFolder = siteFolder
         this.filesToCopyOver = filesToCopyOver
         this.foldersToCopyOver = foldersToCopyOver
+        this.pagesIndex = new Set()
         this.pages = new Map()
     }
 
@@ -59,7 +60,7 @@ class SiteGenerator extends EventEmitter {
         }
     }
 
-    async generateStaticSite(req, res) {
+    async generateStaticSite(req, res, delegate) {
         try{await mkdir(this.siteFolder)}catch(e){}
         
         for await (let file of this.filesToCopyOver) {
@@ -76,7 +77,7 @@ class SiteGenerator extends EventEmitter {
         }
         for await (const file of this.readAllFiles(this.pagesFolder)) {
             let ext = extname(file)
-            await this.genFile(file, req, res)
+            await this.genFile(file, req, res, delegate)
         }
         this.emit(EVENTS.STATIC_SITE_GENERATED, this.routes, this.layouts)
     }
@@ -85,7 +86,12 @@ class SiteGenerator extends EventEmitter {
         return file.endsWith('.md')
     }
 
-    static async getPage(filePath, pagesFolder) {
+    async getPage(filePath, pagesFolder, delegate) {
+        const key = filePath.replace(pagesFolder, '').replace('.md', '.html')
+        if (this.pages.has(key)) {
+            return this.pages.get(key)
+        }
+
         let template = ''
         try {
             template = await readFile(filePath, 'utf-8')
@@ -119,25 +125,26 @@ class SiteGenerator extends EventEmitter {
         
         if (!module) {
             if (SiteGenerator.isMarkdown(filePath)) {
-                return new MarkdownPage(filePath, pagesFolder, template)
+                return new MarkdownPage(filePath, pagesFolder, template, delegate)
             }
-            return new Page(pagesFolder, filePath, template)
+            return new Page(pagesFolder, filePath, template, delegate)
         }
 
-        return await module?.default(pagesFolder, filePath, template)
+        return await module?.default(pagesFolder, filePath, template, delegate)
     }
     
-    async genFile(file, req, res) {
+    async genFile(file, req, res, delegate) {
         // TODO: This strategy is not robust. It might need to be improved.
         if (file.includes('layout')) return
         let ext = extname(file)
         if (!['.md', '.html', '.xml'].includes(ext)) return
+        let key = file.replace('.md', '.html').replace(this.pagesFolder, '')
         let newFileName = file.replace('.md', '.html').replace(this.pagesFolder, this.siteFolder)
         await mkdir(dirname(newFileName), { recursive: true })
         req.url = `http://localhost/${relative(this.siteFolder, newFileName)}`
         req.urlParsed = new URL(req.url, `http://${req.headers?.host ?? 'localhost'}`)
 
-        const page = await SiteGenerator.getPage(file, this.pagesFolder)
+        const page = await this.getPage(file, this.pagesFolder, delegate)
         await page.render()
 
         if (page.layout) {
@@ -191,7 +198,11 @@ class SiteGenerator extends EventEmitter {
                 key.add(resolve(this.pagesFolder, file))
             }
         }
-        this.pages.set(newFileName.replace(this.siteFolder, ''), page)
+        if (!this.pagesIndex.has(key)) {
+            this.pages.set(key, page)
+        }
+
+        this.pagesIndex.add(key)
         await writeFile(newFileName, page.content)
         return page
     }

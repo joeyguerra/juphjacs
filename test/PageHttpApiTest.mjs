@@ -14,6 +14,7 @@ const __dirname = new URL('.', import.meta.url).pathname
 
 await test('Page HTTP API', async t => {
     await t.test('GET Return a Page', async () => {
+        const siteGenerator = new SiteGenerator(__dirname, join(__dirname, 'html'), join(__dirname, 'site'))
         const server = createServer({
             IncomingMessage: FetchRequest,
             ServerResponse: FetchResponse
@@ -21,7 +22,7 @@ await test('Page HTTP API', async t => {
 
         server.on('request', async (req, res) => {
             try {
-                const page = await SiteGenerator.getPage(getFileFromUrl(req), __dirname)
+                const page = await siteGenerator.getPage(getFileFromUrl(req), __dirname)
                 await page.get(req, res)
             } catch (e) {
                 console.error(e)
@@ -48,13 +49,14 @@ await test('Page HTTP API', async t => {
     })
 
     await t.test('Can include an html fragment in a page', async () => {
+        const siteGenerator = new SiteGenerator(__dirname, join(__dirname, 'html'), join(__dirname, 'site'))
         const server = createServer({
             IncomingMessage: FetchRequest,
             ServerResponse: FetchResponse
         })
 
         server.on('request', async (req, res) => {
-            const page = await SiteGenerator.getPage(getFileFromUrl(req), __dirname)
+            const page = await siteGenerator.getPage(getFileFromUrl(req), __dirname)
             try {
                 await page.get(req, res)
             } catch (e) {
@@ -82,13 +84,14 @@ await test('Page HTTP API', async t => {
     })
 
     await t.test('Can redirect', async () => {
+        const siteGenerator = new SiteGenerator(__dirname, join(__dirname, 'html'), join(__dirname, 'site'))
         const server = createServer({
             IncomingMessage: FetchRequest,
             ServerResponse: FetchResponse
         })
 
         server.on('request', async (req, res) => {
-            const page = await SiteGenerator.getPage(getFileFromUrl(req), __dirname)
+            const page = await siteGenerator.getPage(getFileFromUrl(req), __dirname)
             try {
                 await page.get(req, res)
             } catch (e) {
@@ -115,13 +118,14 @@ await test('Page HTTP API', async t => {
 
 await test('Cookie', async t => {
     await t.test('Can set a cookie and render value in markup', async () => {
+        const siteGenerator = new SiteGenerator(__dirname, join(__dirname, 'html'), join(__dirname, 'site'))
         const server = createServer({
             IncomingMessage: FetchRequest,
             ServerResponse: FetchResponse
         })
 
         server.on('request', async (req, res) => {
-            const page = await SiteGenerator.getPage(getFileFromUrl(req), __dirname)
+            const page = await siteGenerator.getPage(getFileFromUrl(req), __dirname)
             try {
                 await page.get(req, res)
             } catch (e) {
@@ -152,13 +156,14 @@ await test('Cookie', async t => {
 
 await test('Page HTTP POST, PUT, DELETE API', async t => {
     await t.test('Can handle a POST request', async () => {
+        const siteGenerator = new SiteGenerator(__dirname, join(__dirname, 'html'), join(__dirname, 'site'))
         const server = createServer({
             IncomingMessage: FetchRequest,
             ServerResponse: FetchResponse
         })
 
         server.on('request', async (req, res) => {
-            const page = await SiteGenerator.getPage(getFileFromUrl(req), __dirname)
+            const page = await siteGenerator.getPage(getFileFromUrl(req), __dirname)
             try {
                 await page.post(req, res)
             } catch (e) {
@@ -192,13 +197,14 @@ await test('Page HTTP POST, PUT, DELETE API', async t => {
     })
 
     await t.test('Can handle a PUT request', async () => {
+        const siteGenerator = new SiteGenerator(__dirname, join(__dirname, 'html'), join(__dirname, 'site'))
         const server = createServer({
             IncomingMessage: FetchRequest,
             ServerResponse: FetchResponse
         })
 
         server.on('request', async (req, res) => {
-            const page = await SiteGenerator.getPage(getFileFromUrl(req), __dirname)
+            const page = await siteGenerator.getPage(getFileFromUrl(req), __dirname)
             try {
                 await page.put(req, res)
             } catch (e) {
@@ -228,13 +234,14 @@ await test('Page HTTP POST, PUT, DELETE API', async t => {
     })
 
     await t.test('Can handle a DELETE request', async () => {
+        const siteGenerator = new SiteGenerator(__dirname, join(__dirname, 'html'), join(__dirname, 'site'))
         const server = createServer({
             IncomingMessage: FetchRequest,
             ServerResponse: FetchResponse
         })
 
         server.on('request', async (req, res) => {
-            const page = await SiteGenerator.getPage(getFileFromUrl(req), __dirname)
+            const page = await siteGenerator.getPage(getFileFromUrl(req), __dirname)
             try {
                 await page.delete(req, res)
             } catch (e) {
@@ -264,13 +271,14 @@ await test('Page HTTP POST, PUT, DELETE API', async t => {
     })
 
     await t.test('Respond to XML', async () => {
+        const siteGenerator = new SiteGenerator(__dirname, join(__dirname, 'html'), join(__dirname, 'site'))
         const server = createServer({
             IncomingMessage: FetchRequest,
             ServerResponse: FetchResponse
         })
 
         server.on('request', async (req, res) => {
-            const page = await SiteGenerator.getPage(getFileFromUrl(req), __dirname)
+            const page = await siteGenerator.getPage(getFileFromUrl(req), __dirname)
             try {
                 await page.get(req, res)
             } catch (e) {

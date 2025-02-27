@@ -17,13 +17,14 @@ function getFileFromUrl(req) {
 
 await test('Concurrent Requests', async t => {
     await t.test('Each request should be isolated from each other', async () => {
+        const siteGenerator = new SiteGenerator(__dirname, join(__dirname, 'html'), join(__dirname, 'site'))
         const server = createServer({
             IncomingMessage: FetchRequest,
             ServerResponse: FetchResponse
         })
 
         server.on('request', async (req, res) => {
-            const sut = await SiteGenerator.getPage(getFileFromUrl(req), __dirname)
+            const sut = await siteGenerator.getPage(getFileFromUrl(req), __dirname)
             try {
                 await sut.get(req, res)
             } catch (e) {

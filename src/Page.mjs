@@ -10,13 +10,14 @@ const EVENTS = {
 }
 
 class Page {
-    constructor (pagesFolder, filePath, template) {
+    constructor (pagesFolder, filePath, template, delegate = {broadcast: async () => {}}) {
         this.pagesFolder = pagesFolder
         this.filePath = filePath
         this.template = template
         this.content = null
         this.contentType = 'text/html'
         this.renderer = new TemplateLiteralRenderer()
+        this.delegate = delegate
     }
 
     async include (filePath) {

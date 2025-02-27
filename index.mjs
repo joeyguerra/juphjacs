@@ -115,18 +115,18 @@ async function * loadMiddlewares() {
     }
 }
 
-async function broadcast(filePath, relativePath, hotReloadNamespace, clients) {
+async function broadcast(filePath, relativePath, hotReloadNamespace, delegate) {
     const ext = extname(filePath)
     const req = new IncomingMessage()
     const res = new ServerResponse(req)
 
-    await siteGenerator.genFile(filePath, req, res)
+    await siteGenerator.genFile(filePath, req, res, delegate)
 
     if(foldersToCopyOver.some(folder => filePath.includes(join(PAGES, folder)))) {
         await siteGenerator.copyFileFrom(filePath, join(SITE_FOLDER, relativePath))
     }
 
-    for (const [socketId, socket] of clients.entries()) {
+    for await (const socket of hotReloadNamespace.sockets.values()) {
         const url = new URL(socket.handshake.headers.referer)
         url.pathname = ifSlashAddIndex(url.pathname)
         const requestFromWebSocketConnection = new FetchRequest(socket)
@@ -135,27 +135,29 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, clients) {
         requestFromWebSocketConnection.headers = socket.handshake.headers
         let shouldBreak = false
         const response = new FetchResponse(requestFromWebSocketConnection)
-        logger.info({shouldBreak, url, filePath, middleware: middlewares.values()}, 'broadcasting file change')
         for await (const middleware of middlewares.values()) {
             await middleware(requestFromWebSocketConnection, response)
             shouldBreak = response.headersSent
         }
         if (shouldBreak) break
-
+    
         const page = siteGenerator.pages.values().find(page => page.route.filePath.includes(url.pathname))
-       
         if (page) {
             socket.emit('file changed', {fileThatTriggeredIt: relativePath, fileName: relativePath, data: page.content })
         } else {
             logger.info({message: 'no page found', url: url.pathname}, 'broadcast')
         }
-    }
+     }
 }
 
-async function main (server) {
+async function main (server, delegate = {}) {
+    if (!delegate) {
+        delegate = {}
+    }
+
     try {
         for await (const plugin of loadPlugins()) {
-            await plugin.default()
+            await plugin.default(delegate)
         }
     } catch (e) {
         logger.warn(`Error loading plugins: ${e.message}`)
@@ -163,7 +165,7 @@ async function main (server) {
 
     try {
         for await (const middleware of loadMiddlewares()) {
-            middlewares.add(await middleware.default())
+            middlewares.add(await middleware.default(delegate))
         }    
     } catch (e) {
         logger.warn(e.message)
@@ -176,7 +178,6 @@ async function main (server) {
     const io = new SocketServer(server)
     const shortCircuitUrls = ['socket.io']
     const honeypoturls = []
-    const clients = new Map()
     const hotReloadNamespace = io.of('/hot-reload')
     const loggerNamespace = io.of('/logger')
     
@@ -191,9 +192,9 @@ async function main (server) {
 
     loggerNamespace.on('connection', socket => {
         logger.info({message: 'connected to logger %s', id: socket.id}, 'logger:connection')
-        clients.set(socket.id, socket)
         socket.on('disconnect', () => {
-            clients.delete(socket.id)
+            socket.removeAllListeners()
+            socket.disconnect(true)
             logger.info({message: '/logger user disconnected %s', id: socket.id}, 'logger:connection')
         })
         socket.on('get logs', () => {
@@ -207,9 +208,9 @@ async function main (server) {
 
     hotReloadNamespace.on('connection', socket => {
         logger.info({message: 'connected to hot reloading %s', id: socket.id}, 'hot-reload:connection')
-        clients.set(socket.id, socket)
-        socket.on('disconnect', () => {
-            clients.delete(socket.id)
+        socket.on('disconnect', async () => {
+            socket.removeAllListeners()
+            socket.disconnect(true)
             logger.info({message: '/hot-reload user disconnected %s', id: socket.id}, 'hot-reload:connection')
         })
     })
@@ -262,22 +263,8 @@ async function main (server) {
         }
 
         try {
-            const existing = siteGenerator.pages.values().find(page => {
-                return page.route.test(req.urlParsed.pathname)
-            })
-
             let filePath = join(PAGES, req.urlParsed.pathname)
-            if (existing) {
-                filePath = existing.filePath
-            }
-            
-            const page = await SiteGenerator.getPage(filePath, PAGES)
-    
-            if (!existing) {
-                res.statusCode = 404
-                return res.end('Not found')
-            }
-
+            const page = await siteGenerator.getPage(filePath, PAGES, delegate)
             if (page[req.method.toLowerCase()]) {
                 await page[req.method.toLowerCase()](req, res)
             } else {
@@ -291,13 +278,38 @@ async function main (server) {
             res.end('Internal server error')
         }
     })
+    
+    delegate.broadcast = async function (content, filePath) {
+        for await (const socket of hotReloadNamespace.sockets.values()) {
+            const url = new URL(socket.handshake.headers.referer)
+            url.pathname = ifSlashAddIndex(url.pathname)
+            const requestFromWebSocketConnection = new FetchRequest(socket)
+            requestFromWebSocketConnection.method = 'GET'
+            requestFromWebSocketConnection.url = url.pathname
+            requestFromWebSocketConnection.headers = socket.handshake.headers
+            let shouldBreak = false
+            const response = new FetchResponse(requestFromWebSocketConnection)
+            for await (const middleware of middlewares.values()) {
+                await middleware(requestFromWebSocketConnection, response)
+                shouldBreak = response.headersSent
+            }
+            if (shouldBreak) break
+        
+            const page = siteGenerator.pages.values().find(page => page.route.filePath.includes(url.pathname))
+            if (page) {
+                socket.emit('file changed', {fileThatTriggeredIt: relativePath, fileName: relativePath, data: page.content })
+            } else {
+                logger.info({message: 'no page found', url: url.pathname}, 'broadcast')
+            }
+         }
+    }
 
-    await siteGenerator.generateStaticSite(req, res)
+    await siteGenerator.generateStaticSite(req, res, delegate)
 
     Array('add', 'change').forEach(event => {
         chokidar.watch(PAGES).on(event, async (filePath, stats) => {
             const relativePath = relative(PAGES, filePath)
-            await broadcast(filePath, relativePath, hotReloadNamespace, clients)
+            await broadcast(filePath, relativePath, hotReloadNamespace, delegate)
         })
     })
 
