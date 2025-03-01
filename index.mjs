@@ -66,7 +66,7 @@ const filesToCopyOver = Array.from([
     {
         from: join(PAGES, 'favicon.ico'),
         to: join(SITE_FOLDER, 'favicon.ico')
-    }, 
+    },
     {
         from: join(PAGES, 'robots.txt'),
         to: join(SITE_FOLDER, 'robots.txt')
@@ -97,7 +97,7 @@ function ifSlashAddIndex(pathname) {
     return modifiedPathname
 }
 
-async function * loadPlugins() {
+async function* loadPlugins() {
     for await (const file of await opendir(join(rootFolder, 'plugins'))) {
         if (file.isDirectory()) continue
         if (extname(file.name) !== '.mjs') continue
@@ -105,7 +105,7 @@ async function * loadPlugins() {
     }
 }
 
-async function * loadMiddlewares() {
+async function* loadMiddlewares() {
     for await (const file of await opendir(join(rootFolder, 'middlewares'))) {
         if (file.isDirectory()) continue
         if (extname(file.name) !== '.mjs') continue
@@ -119,14 +119,14 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, delegate) {
     const res = new ServerResponse(req)
     const lookupKey = relativePath.replace('.md', '.html')
 
-    if(foldersToCopyOver.some(folder => filePath.includes(join(PAGES, folder)))) {
+    if (foldersToCopyOver.some(folder => filePath.includes(join(PAGES, folder)))) {
         await siteGenerator.copyFileFrom(filePath, join(SITE_FOLDER, relativePath))
     }
 
     const changedPage = siteGenerator.pages.get(`/${lookupKey}`)
 
     if (!changedPage) {
-        logger.info({message: 'page not found', filePath}, 'broadcast')
+        logger.info({ message: 'page not found', filePath }, 'broadcast')
         return
     }
     const clientsOnPage = Array.from(hotReloadNamespace.sockets.values()).filter(socket => {
@@ -141,7 +141,7 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, delegate) {
     }
 
     const generatedPage = await siteGenerator.genFile(filePath, req, res, delegate)
-    
+
     for await (const socket of clientsOnPage) {
         const url = new URL(socket.handshake.headers.referer)
         url.pathname = ifSlashAddIndex(url.pathname)
@@ -156,11 +156,11 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, delegate) {
             shouldSkip = response.headersSent
         }
         if (shouldSkip) continue
-        socket.emit('file changed', {fileThatTriggeredIt: relativePath, fileName: relativePath, data: generatedPage.content })
+        socket.emit('file changed', { fileThatTriggeredIt: relativePath, fileName: relativePath, data: generatedPage.content })
     }
 }
 
-async function main (server, delegate = {}) {
+async function main(server, delegate = {}) {
     if (!delegate) {
         delegate = {}
     }
@@ -176,7 +176,7 @@ async function main (server, delegate = {}) {
     try {
         for await (const middleware of loadMiddlewares()) {
             middlewares.add(await middleware.default(delegate))
-        }    
+        }
     } catch (e) {
         logger.warn(e.message)
     }
@@ -189,7 +189,7 @@ async function main (server, delegate = {}) {
     const shortCircuitUrls = ['socket.io']
     const honeypoturls = []
     const hotReloadNamespace = io.of('/hot-reload')
-    
+
     //TODO: Need to change the strategy for triggering file changes for layout files.
     const chokidar = new ChokidarWannabee(PAGES, async (folder, event, filePath, absolutePath) => {
         let filesWithThisLayout = siteGenerator.layouts.get(absolutePath)
@@ -200,18 +200,27 @@ async function main (server, delegate = {}) {
         return true
     })
     hotReloadNamespace.on('connection', socket => {
-        logger.info({message: 'connected to hot reloading %s', id: socket.id}, 'hot-reload:connection')
+        logger.info({ message: 'connected to hot reloading %s', id: socket.id }, 'hot-reload:connection')
         socket.on('disconnect', async () => {
             socket.removeAllListeners()
             socket.disconnect(true)
-            logger.info({message: '/hot-reload user disconnected %s', id: socket.id}, 'hot-reload:connection')
+            logger.info({ message: '/hot-reload user disconnected %s', id: socket.id }, 'hot-reload:connection')
         })
+    })
+
+    server.on('close', () => {
+        io.close(() => {})
+    
+        for (const [id, socket] of io.sockets.sockets) {
+            socket.disconnect(true)
+        }    
+        siteGenerator.dispose()
     })
 
     server.on('request', async (req, res) => {
         try {
             req.urlParsed = new URL(req.url ?? '/', `http://${req.headers?.host ?? 'localhost'}`)
-            
+
             if (shortCircuitUrls.some(shortCircuitUrl => req.urlParsed.pathname.includes(shortCircuitUrl))) {
                 return
             }
@@ -242,31 +251,31 @@ async function main (server, delegate = {}) {
                 pipe(res) {
                     if (!this.filePath) return null
                     res.setHeader('Content-Type', 'text/javascript')
-                    res.statusCode = 200    
+                    res.statusCode = 200
                     return this.stream.pipe(res)
                 }
             }
 
             let coreClientSiteCode = new CoreClientSiteCode(req.urlParsed.pathname, rootFolder, req)
-            if(coreClientSiteCode.pipe(res)) {
+            if (coreClientSiteCode.pipe(res)) {
                 return
             }
-            
+
             for await (const middleware of middlewares.values()) {
                 await middleware(req, res)
             }
-            
+
             req.urlParsed.pathname = ifSlashAddIndex(req.urlParsed.pathname)
-            
+
             const ext = extname(req.urlParsed.pathname).substring(1)
             const isHoneypot = honeypoturls.includes(join(SITE_FOLDER, req.urlParsed.pathname))
             if (isHoneypot) {
-                logger.info({message: 'honeypot', url: req.urlParsed.pathname, status: 404}, 'honeypot')
+                logger.info({ message: 'honeypot', url: req.urlParsed.pathname, status: 404 }, 'honeypot')
                 res.statusCode = 404
                 res.end('Not found')
                 return req.destroy()
             }
-            
+
             try {
                 const stats = await stat(join(SITE_FOLDER, req.urlParsed.pathname), constants.F_OK)
                 if (!stats.isDirectory()) {
@@ -296,7 +305,7 @@ async function main (server, delegate = {}) {
         } finally {
         }
     })
-    
+
     delegate.broadcast = async function (content, filePath) {
         for await (const socket of hotReloadNamespace.sockets.values()) {
             const url = new URL(socket.handshake.headers.referer)
@@ -312,14 +321,14 @@ async function main (server, delegate = {}) {
                 shouldBreak = response.headersSent
             }
             if (shouldBreak) break
-        
+
             const page = siteGenerator.pages.values().find(page => page.route.filePath.includes(url.pathname))
             if (page) {
-                socket.emit('file changed', {fileThatTriggeredIt: relativePath, fileName: relativePath, data: page.content })
+                socket.emit('file changed', { fileThatTriggeredIt: relativePath, fileName: relativePath, data: page.content })
             } else {
-                logger.info({message: 'no page found', url: url.pathname}, 'broadcast')
+                logger.info({ message: 'no page found', url: url.pathname }, 'broadcast')
             }
-         }
+        }
     }
 
     await siteGenerator.generateStaticSite(req, res, delegate)

@@ -4,11 +4,17 @@ import { watch } from 'node:fs'
 import EventEmitter from 'node:events'
 
 class ChokidarWannabee extends EventEmitter {
+    #watcher = null
     constructor(folder, delegate) {
         super()
         this.folder = folder
         this.delegate = delegate ?? function() { return false }
         this.debounceKeys = new Map()
+    }
+    dispose () {
+        this.#watcher.close()
+        this.removeAllListeners()
+        this.debounceKeys.clear()
     }
     mapEvent(event) {
         switch (event) {
@@ -19,7 +25,7 @@ class ChokidarWannabee extends EventEmitter {
         }
     }
     watch(folder) {
-        watch(folder,  { recursive: true }, this.fire.bind(this, folder))
+        this.#watcher = watch(folder,  { recursive: true }, this.fire.bind(this, folder))
         return this
     }
     async fire (folder, event, filename) {

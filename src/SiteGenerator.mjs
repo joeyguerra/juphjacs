@@ -28,6 +28,15 @@ class SiteGenerator extends EventEmitter {
         this.pagesIndex = new Set()
         this.pages = new Map()
     }
+    
+    dispose () {
+        this.removeAllListeners()
+        this.routes.clear()
+        this.layouts.clear()
+        this.localImports.clear()
+        this.pagesIndex.clear()
+        this.pages.clear()
+    }
 
     async * readAllFiles (folder) {
         const dir = await opendir(folder)
