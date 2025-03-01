@@ -20,7 +20,6 @@ const PACKAGE_NAME = `${pkg.name}:server`
 const ringBuffer = new RingBuffer(100)
 
 const logger = new Logger(pkg.name, ringBuffer, DEBUG)
-const __dirname = dirname(fileURLToPath(import.meta.url))
 const rootFolder = process.cwd()
 
 const options = {
