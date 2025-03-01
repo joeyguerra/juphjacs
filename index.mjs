@@ -4,7 +4,7 @@ import { Logger } from './src/Logger.mjs'
 import { dirname, extname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createServer, IncomingMessage, ServerResponse } from 'node:http'
-import { opendir, mkdir, stat } from 'node:fs/promises'
+import { opendir, mkdir, stat, readFile } from 'node:fs/promises'
 import { Server as SocketServer } from 'socket.io'
 import { ChokidarWannabee } from './src/ChokidarWannabee.mjs'
 import { RequestParams } from './src/RequestParams.mjs'
@@ -119,35 +119,47 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, delegate) {
     const ext = extname(filePath)
     const req = new IncomingMessage()
     const res = new ServerResponse(req)
-
-    await siteGenerator.genFile(filePath, req, res, delegate)
+    const lookupKey = relativePath.replace('.md', '.html')
 
     if(foldersToCopyOver.some(folder => filePath.includes(join(PAGES, folder)))) {
         await siteGenerator.copyFileFrom(filePath, join(SITE_FOLDER, relativePath))
     }
 
-    for await (const socket of hotReloadNamespace.sockets.values()) {
+    const changedPage = siteGenerator.pages.get(`/${lookupKey}`)
+
+    if (!changedPage) {
+        logger.info({message: 'page not found', filePath}, 'broadcast')
+        return
+    }
+    const clientsOnPage = Array.from(hotReloadNamespace.sockets.values()).filter(socket => {
+        const url = new URL(socket.handshake.headers.referer)
+        url.pathname = ifSlashAddIndex(url.pathname)
+        return changedPage.route.match(url.pathname)
+    })
+
+    if (clientsOnPage.length > 0) {
+        const content = await readFile(changedPage.filePath, 'utf-8')
+        changedPage.template = content
+    }
+
+    const generatedPage = await siteGenerator.genFile(filePath, req, res, delegate)
+    
+    for await (const socket of clientsOnPage) {
         const url = new URL(socket.handshake.headers.referer)
         url.pathname = ifSlashAddIndex(url.pathname)
         const requestFromWebSocketConnection = new FetchRequest(socket)
         requestFromWebSocketConnection.method = 'GET'
         requestFromWebSocketConnection.url = url.pathname
         requestFromWebSocketConnection.headers = socket.handshake.headers
-        let shouldBreak = false
+        let shouldSkip = false
         const response = new FetchResponse(requestFromWebSocketConnection)
         for await (const middleware of middlewares.values()) {
             await middleware(requestFromWebSocketConnection, response)
-            shouldBreak = response.headersSent
+            shouldSkip = response.headersSent
         }
-        if (shouldBreak) break
-    
-        const page = siteGenerator.pages.values().find(page => page.route.filePath.includes(url.pathname))
-        if (page) {
-            socket.emit('file changed', {fileThatTriggeredIt: relativePath, fileName: relativePath, data: page.content })
-        } else {
-            logger.info({message: 'no page found', url: url.pathname}, 'broadcast')
-        }
-     }
+        if (shouldSkip) continue
+        socket.emit('file changed', {fileThatTriggeredIt: relativePath, fileName: relativePath, data: generatedPage.content })
+    }
 }
 
 async function main (server, delegate = {}) {
@@ -179,8 +191,8 @@ async function main (server, delegate = {}) {
     const shortCircuitUrls = ['socket.io']
     const honeypoturls = []
     const hotReloadNamespace = io.of('/hot-reload')
-    const loggerNamespace = io.of('/logger')
     
+    //TODO: Need to change the strategy for triggering file changes for layout files.
     const chokidar = new ChokidarWannabee(PAGES, async (folder, event, filePath, absolutePath) => {
         let filesWithThisLayout = siteGenerator.layouts.get(absolutePath)
         if (!filesWithThisLayout) return false
@@ -189,23 +201,6 @@ async function main (server, delegate = {}) {
         }
         return true
     })
-
-    loggerNamespace.on('connection', socket => {
-        logger.info({message: 'connected to logger %s', id: socket.id}, 'logger:connection')
-        socket.on('disconnect', () => {
-            socket.removeAllListeners()
-            socket.disconnect(true)
-            logger.info({message: '/logger user disconnected %s', id: socket.id}, 'logger:connection')
-        })
-        socket.on('get logs', () => {
-            const interval = setInterval(() => {
-                for (const log of ringBuffer) {
-                    socket.emit('logs', log)
-                }
-            }, 1000)
-        })
-    })
-
     hotReloadNamespace.on('connection', socket => {
         logger.info({message: 'connected to hot reloading %s', id: socket.id}, 'hot-reload:connection')
         socket.on('disconnect', async () => {
@@ -216,66 +211,73 @@ async function main (server, delegate = {}) {
     })
 
     server.on('request', async (req, res) => {
-        req.urlParsed = new URL(req.url ?? '/', `http://${req.headers?.host ?? 'localhost'}`)
-
-        if (shortCircuitUrls.some(shortCircuitUrl => req.urlParsed.pathname.includes(shortCircuitUrl))) {
-            return
-        }
-
-        if (req.urlParsed.pathname === '/js/morphdom-esm.js') {
-            res.setHeader('Content-Type', 'text/javascript')    
-            return createReadStream(join(rootFolder, 'node_modules/morphdom/dist/morphdom-esm.js')).pipe(res)
-        }
-
-        if (req.urlParsed.pathname === '/js/HotReloader.mjs') {
-            res.setHeader('Content-Type', 'text/javascript')
-            return createReadStream(join(__dirname, 'src/HotReloader.mjs')).pipe(res)
-        }
-
-        for await (const middleware of middlewares.values()) {
-            await middleware(req, res)
-        }
-
-        req.urlParsed.pathname = ifSlashAddIndex(req.urlParsed.pathname)
-
-        const ext = extname(req.urlParsed.pathname).substring(1)
-        const isHoneypot = honeypoturls.includes(join(SITE_FOLDER, req.urlParsed.pathname))
-        if (isHoneypot) {
-            logger.info({message: 'honeypot', url: req.urlParsed.pathname, status: 404}, 'honeypot')
-            res.statusCode = 404
-            return res.end('Not found')
-        }
-
-        // TODO: This strategy is not robust. It might need to be improved.
-        if (ext.length > 0 && !['html'].includes(ext)) {
+        try {
+            req.urlParsed = new URL(req.url ?? '/', `http://${req.headers?.host ?? 'localhost'}`)
+            
+            if (shortCircuitUrls.some(shortCircuitUrl => req.urlParsed.pathname.includes(shortCircuitUrl))) {
+                return
+            }
+            
+            if (req.urlParsed.pathname === '/js/morphdom-esm.js') {
+                res.setHeader('Content-Type', 'text/javascript')  
+                const stream = createReadStream(join(rootFolder, 'node_modules/morphdom/dist/morphdom-esm.js'))
+                stream.on('finish', () => {
+                    req.destroy()
+                })
+                return stream.pipe(res)
+            }
+            
+            if (req.urlParsed.pathname === '/js/HotReloader.mjs') {
+                res.setHeader('Content-Type', 'text/javascript')
+                const stream = createReadStream(join(__dirname, 'src/HotReloader.mjs'))
+                stream.on('finish', () => {
+                    req.destroy()
+                })
+                return stream.pipe(res)
+            }
+            
+            for await (const middleware of middlewares.values()) {
+                await middleware(req, res)
+            }
+            
+            req.urlParsed.pathname = ifSlashAddIndex(req.urlParsed.pathname)
+            
+            const ext = extname(req.urlParsed.pathname).substring(1)
+            const isHoneypot = honeypoturls.includes(join(SITE_FOLDER, req.urlParsed.pathname))
+            if (isHoneypot) {
+                logger.info({message: 'honeypot', url: req.urlParsed.pathname, status: 404}, 'honeypot')
+                res.statusCode = 404
+                res.end('Not found')
+                return req.destroy()
+            }
+            
             try {
                 const stats = await stat(join(SITE_FOLDER, req.urlParsed.pathname), constants.F_OK)
                 if (!stats.isDirectory()) {
                     res.setHeader('Content-Type', CONTENT_TYPE[ext] ?? 'text/plain')
-                    return createReadStream(join(SITE_FOLDER, req.urlParsed.pathname)).pipe(res)
+                    res.statusCode = 200
+                    const stream = createReadStream(join(SITE_FOLDER, req.urlParsed.pathname))
+                    stream.on('finish', () => {
+                        req.destroy()
+                    })
+                    return stream.pipe(res)
                 } else {
                     res.statusCode = 404
-                    return res.end('Not found')
+                    res.end('Not found')
+                    return req.destroy()
                 }
             } catch (e) {
                 logger.error(`Serving file: ${e.message} for ${req.urlParsed.pathname} in ${SITE_FOLDER}`)
+                res.statusCode = 500
+                res.end('Internal Server Error')
+                req.destroy()
             }
-        }
-
-        try {
-            let filePath = join(PAGES, req.urlParsed.pathname)
-            const page = await siteGenerator.getPage(filePath, PAGES, delegate)
-            if (page[req.method.toLowerCase()]) {
-                await page[req.method.toLowerCase()](req, res)
-            } else {
-                await page.render()
-                res.statusCode = 200
-                res.end(page.content)
-            }
-        } catch (e) {
-            logger.error(`Loading Page: ${e.message} for ${req.urlParsed.pathname} in ${PAGES}`)
+        } catch {
+            logger.error(`Error in request handler`)
             res.statusCode = 500
-            res.end('Internal server error')
+            res.end('Internal Server Error')
+            req.destroy()
+        } finally {
         }
     })
     
@@ -309,6 +311,7 @@ async function main (server, delegate = {}) {
     Array('add', 'change').forEach(event => {
         chokidar.watch(PAGES).on(event, async (filePath, stats) => {
             const relativePath = relative(PAGES, filePath)
+            console.log('files that changed', relativePath)
             await broadcast(filePath, relativePath, hotReloadNamespace, delegate)
         })
     })
