@@ -16,7 +16,6 @@ import { argv } from 'node:process'
 import { parseArgs } from 'node:util'
 
 const DEBUG = process.env.DEBUG
-const PACKAGE_NAME = `${pkg.name}:server`
 const ringBuffer = new RingBuffer(100)
 
 const logger = new Logger(pkg.name, ringBuffer, DEBUG)
