@@ -14,6 +14,7 @@ import { FetchRequest, FetchResponse } from './src/FetchApi.mjs'
 import { Page, EVENTS } from './src/Page.mjs'
 import { argv } from 'node:process'
 import { parseArgs } from 'node:util'
+import { CoreClientSiteCode } from './src/CoreClientSiteCode.mjs'
 
 const DEBUG = process.env.DEBUG
 const ringBuffer = new RingBuffer(100)
@@ -113,6 +114,16 @@ async function* loadMiddlewares() {
     }
 }
 
+function createFetchRequestFromSocket(socket) {
+    const url = new URL(socket.handshake.headers.referer)
+    url.pathname = ifSlashAddIndex(url.pathname)
+    const requestFromWebSocketConnection = new FetchRequest(socket)
+    requestFromWebSocketConnection.method = 'GET'
+    requestFromWebSocketConnection.url = url.pathname
+    requestFromWebSocketConnection.headers = socket.handshake.headers
+    return requestFromWebSocketConnection
+}
+
 async function broadcast(filePath, relativePath, hotReloadNamespace, delegate) {
     const ext = extname(filePath)
     const req = new IncomingMessage()
@@ -143,12 +154,7 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, delegate) {
     const generatedPage = await siteGenerator.genFile(filePath, req, res, delegate)
 
     for await (const socket of clientsOnPage) {
-        const url = new URL(socket.handshake.headers.referer)
-        url.pathname = ifSlashAddIndex(url.pathname)
-        const requestFromWebSocketConnection = new FetchRequest(socket)
-        requestFromWebSocketConnection.method = 'GET'
-        requestFromWebSocketConnection.url = url.pathname
-        requestFromWebSocketConnection.headers = socket.handshake.headers
+        const requestFromWebSocketConnection = createFetchRequestFromSocket(socket)
         let shouldSkip = false
         const response = new FetchResponse(requestFromWebSocketConnection)
         for await (const middleware of middlewares.values()) {
@@ -225,37 +231,6 @@ async function main(server, delegate = {}) {
                 return
             }
 
-            class CoreClientSiteCode {
-                constructor(pathName, root, req) {
-                    this.pathName = pathName
-                    this.filePath = null
-                    this.root = root
-                    if (this.pathName == '/js/morphdom-esm.js') {
-                        this.filePath = join(this.root, 'node_modules/morphdom/dist/morphdom-esm.js')
-                    } else if (this.pathName == '/js/HotReloader.mjs') {
-                        this.filePath = join(this.root, 'src/HotReloader.mjs')
-                    }
-                    if (this.filePath) {
-                        this.req = req
-                        this.stream = createReadStream(this.filePath)
-                        this.stream.on('finish', () => {
-                            this.req.destroy()
-                        })
-                        this.stream.on('error', e => {
-                            logger.error(`Error in CoreClientSiteCode: ${e.message}`)
-                            this.req.destroy()
-                        })
-                    }
-                }
-
-                pipe(res) {
-                    if (!this.filePath) return null
-                    res.setHeader('Content-Type', 'text/javascript')
-                    res.statusCode = 200
-                    return this.stream.pipe(res)
-                }
-            }
-
             let coreClientSiteCode = new CoreClientSiteCode(req.urlParsed.pathname, rootFolder, req)
             if (coreClientSiteCode.pipe(res)) {
                 return
@@ -308,12 +283,7 @@ async function main(server, delegate = {}) {
 
     delegate.broadcast = async function (content, filePath) {
         for await (const socket of hotReloadNamespace.sockets.values()) {
-            const url = new URL(socket.handshake.headers.referer)
-            url.pathname = ifSlashAddIndex(url.pathname)
-            const requestFromWebSocketConnection = new FetchRequest(socket)
-            requestFromWebSocketConnection.method = 'GET'
-            requestFromWebSocketConnection.url = url.pathname
-            requestFromWebSocketConnection.headers = socket.handshake.headers
+            const requestFromWebSocketConnection = createFetchRequestFromSocket(socket)
             let shouldBreak = false
             const response = new FetchResponse(requestFromWebSocketConnection)
             for await (const middleware of middlewares.values()) {
