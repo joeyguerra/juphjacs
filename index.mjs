@@ -245,7 +245,7 @@ async function main(server, delegate = {}) {
 
     const siteGenerator = new SiteGenerator(rootFolder, PAGES, SITE_FOLDER, filesToCopyOver, foldersToCopyOver)
     siteGenerator.on(SITE_GENERATOR_EVENTS.STATIC_SITE_GENERATED, (routes, layouts) => {
-        process.emit(EVENTS.STATIC_SITE_GENERATED, routes, layouts)
+        process.emit(SITE_GENERATOR_EVENTS.STATIC_SITE_GENERATED, routes, layouts)
     })
 
     siteGenerator.on('error', e => logger.error(e, 'error in site generator'))
