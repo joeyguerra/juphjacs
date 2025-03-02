@@ -1,10 +1,10 @@
 import { Writable } from 'node:stream'
 
 class Logger extends Writable {
-    constructor(name, ringBuffer, debug, options = {}) {
+    constructor(name, ringBuffer, logLevel, options = {}) {
         super({...options, objectMode: true})
         this.name = name
-        this.debug = debug
+        this.logLevel = logLevel
         this.ringBuffer = ringBuffer
     }
 
@@ -13,26 +13,26 @@ class Logger extends Writable {
     }
 
     debug (message, label) {
-        if (!this.debug) return
-        if (this.debug !== 'debug') return
+        if (!this.logLevel) return
+        if (this.logLevel !== 'debug') return
         this.log(message, label, 'debug')
     }
 
     info (message, label) {
-        if (!this.debug) return
-        if (!['info', 'debug'].includes(this.debug)) return
+        if (!this.logLevel) return
+        if (!['info', 'debug'].includes(this.logLevel)) return
         this.log(message, label, 'info')
     }
 
     warn (message, label) {
-        if (!this.debug) return
-        if (!['info', 'debug', 'warn'].includes(this.debug)) return
+        if (!this.logLevel) return
+        if (!['info', 'debug', 'warn'].includes(this.logLevel)) return
         this.log(message, label, 'warn')
     }
 
     error (message, label) {
-        if (!this.debug) return
-        if (!['info', 'debug', 'warn', 'error'].includes(this.debug)) return
+        if (!this.logLevel) return
+        if (!['info', 'debug', 'warn', 'error'].includes(this.logLevel)) return
         this.log(message, label, 'error')
     }
 

@@ -1,5 +1,8 @@
 import { join } from 'node:path'
 import { createReadStream } from 'node:fs'
+import { dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 
 class CoreClientSiteCode {
     #fileMap = new Map()
@@ -9,10 +12,14 @@ class CoreClientSiteCode {
         this.req = req
         this.filePath = null
         this.logger = logger
+
+        const moduleDir = dirname(fileURLToPath(import.meta.url))
+        const isRunningInModule = moduleDir.includes('node_modules/juphjacs')
+        const baseDir = isRunningInModule ? moduleDir : process.cwd()
         this.#fileMap = new Map([
             ['/js/morphdom-esm.js', join(this.root, 'node_modules/morphdom/dist/morphdom-esm.js')],
-            ['/js/HotReloader.mjs', join(this.root, 'src/HotReloader.mjs')]
-        ])
+            ['/js/HotReloader.mjs', join(baseDir.replace(/\/src$/, ''), 'src/HotReloader.mjs')]
+        ]) 
         this.filePath = this.#fileMap.get(this.pathName)
 
         if (this.filePath) {

@@ -302,11 +302,11 @@ async function main(server, delegate = {}) {
             }
             if (shouldBreak) break
 
-            const page = siteGenerator.pages.values().find(page => page.route.filePath.includes(url.pathname))
-            if (page) {
-                socket.emit('file changed', { fileThatTriggeredIt: relativePath, fileName: relativePath, data: page.content })
+            const page = siteGenerator.pages.values().find(page => page.route.test(requestFromWebSocketConnection.url))
+            if (page && page.route.filePath === filePath) {
+                socket.emit('file changed', { fileThatTriggeredIt: filePath, fileName: filePath, data: page.content })
             } else {
-                logger.info({ message: 'no page found', url: url.pathname }, 'broadcast')
+                logger.debug({ message: 'No page found', filePath, url: requestFromWebSocketConnection.url }, 'broadcast')
             }
         }
     }
@@ -316,7 +316,6 @@ async function main(server, delegate = {}) {
     Array('add', 'change').forEach(event => {
         chokidar.watch(PAGES).on(event, async (filePath, stats) => {
             const relativePath = relative(PAGES, filePath)
-            console.log('files that changed', relativePath)
             await broadcast(filePath, relativePath, hotReloadNamespace, delegate)
         })
     })
