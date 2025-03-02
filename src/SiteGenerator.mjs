@@ -72,11 +72,11 @@ class SiteGenerator extends EventEmitter {
     async generateStaticSite(req, res, delegate) {
         try{await mkdir(this.siteFolder)}catch(e){}
         
-        for await (let file of this.filesToCopyOver) {
+        for await (let file of this.filesToCopyOver ?? []) {
             await this.copyFileFrom(file.from, file.to)
         }
 
-        for await (let folder of this.foldersToCopyOver) {
+        for await (let folder of this.foldersToCopyOver ?? []) {
             try{
                 await mkdir(join(this.siteFolder, folder), { recursive: true })
             } catch (e) {
@@ -86,7 +86,11 @@ class SiteGenerator extends EventEmitter {
         }
         for await (const file of this.readAllFiles(this.pagesFolder)) {
             let ext = extname(file)
-            await this.genFile(file, req, res, delegate)
+            try {
+                await this.genFile(file, req, res, delegate)
+            } catch (e) {
+                this.emit('error', { file, error: e })
+            }
         }
         this.emit(EVENTS.STATIC_SITE_GENERATED, this.routes, this.layouts)
     }
@@ -150,8 +154,6 @@ class SiteGenerator extends EventEmitter {
         let key = file.replace('.md', '.html').replace(this.pagesFolder, '')
         let newFileName = file.replace('.md', '.html').replace(this.pagesFolder, this.siteFolder)
         await mkdir(dirname(newFileName), { recursive: true })
-        req.url = `http://localhost/${relative(this.siteFolder, newFileName)}`
-        req.urlParsed = new URL(req.url, `http://${req.headers?.host ?? 'localhost'}`)
 
         const page = await this.getPage(file, this.pagesFolder, delegate)
         await page.render()
@@ -207,6 +209,7 @@ class SiteGenerator extends EventEmitter {
                 key.add(resolve(this.pagesFolder, file))
             }
         }
+
         if (!this.pagesIndex.has(key)) {
             this.pages.set(key, page)
         }

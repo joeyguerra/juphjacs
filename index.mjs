@@ -78,10 +78,6 @@ const filesToCopyOver = Array.from([
     }
 ])
 
-const siteGenerator = new SiteGenerator(rootFolder, PAGES, SITE_FOLDER, filesToCopyOver, foldersToCopyOver)
-
-siteGenerator.on('error', e => logger.error(e, 'error in site generator'))
-
 async function* readAllFiles(folder) {
     const dir = await opendir(folder)
     for await (const dirent of dir) {
@@ -128,7 +124,7 @@ function createFetchRequestFromSocket(socket) {
     return requestFromWebSocketConnection
 }
 
-async function broadcast(filePath, relativePath, hotReloadNamespace, delegate) {
+async function broadcast(filePath, relativePath, hotReloadNamespace, delegate, siteGenerator) {
     const ext = extname(filePath)
     const req = new IncomingMessage()
     const res = new ServerResponse(req)
@@ -144,6 +140,7 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, delegate) {
         logger.info({ message: 'page not found', filePath }, 'broadcast')
         return
     }
+
     const clientsOnPage = Array.from(hotReloadNamespace.sockets.values()).filter(socket => {
         const url = new URL(socket.handshake.headers.referer)
         url.pathname = ifSlashAddIndex(url.pathname)
@@ -170,7 +167,7 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, delegate) {
     }
 }
 
-async function handleRequest(req, res) {
+async function handleRequest(req, res, siteGenerator) {
     try {
         req.urlParsed = new URL(req.url ?? '/', `http://${req.headers?.host ?? 'localhost'}`)
 
@@ -189,8 +186,7 @@ async function handleRequest(req, res) {
 
         req.urlParsed.pathname = ifSlashAddIndex(req.urlParsed.pathname)
 
-        const ext = extname(req.urlParsed.pathname).substring(1)
-        const isHoneypot = honeypoturls.includes(join(SITE_FOLDER, req.urlParsed.pathname))
+        const isHoneypot = honeypoturls.includes(join(siteGenerator.siteFolder, req.urlParsed.pathname))
         if (isHoneypot) {
             logger.info({ message: 'honeypot', url: req.urlParsed.pathname, status: 200 }, 'honeypot')
             res.statusCode = 200
@@ -205,12 +201,21 @@ async function handleRequest(req, res) {
             return
         }
 
+        let fileToLoad = join(siteGenerator.siteFolder, req.urlParsed.pathname)
+        const ext = extname(req.urlParsed.pathname).substring(1)
+        let contentType = CONTENT_TYPE[ext] ?? 'text/plain'
+        if (page) {
+            fileToLoad = page.filePath.replace(siteGenerator.pagesFolder, siteGenerator.siteFolder)
+            contentType = page.contentType
+        }
+
         try {
-            const stats = await stat(join(SITE_FOLDER, req.urlParsed.pathname), constants.F_OK)
+            const stats = await stat(fileToLoad, constants.F_OK)
             if (!stats.isDirectory()) {
-                res.setHeader('Content-Type', CONTENT_TYPE[ext] ?? 'text/plain')
+                res.setHeader('Content-Type', contentType)
                 res.statusCode = 200
-                const stream = createReadStream(join(SITE_FOLDER, req.urlParsed.pathname))
+                res.statusMessage = 'OK'
+                const stream = createReadStream(fileToLoad)
                 stream.on('finish', () => {
                     req.destroy()
                 })
@@ -244,6 +249,10 @@ async function main(server, delegate = {}) {
     if (!delegate) {
         delegate = {}
     }
+
+    const siteGenerator = new SiteGenerator(rootFolder, PAGES, SITE_FOLDER, filesToCopyOver, foldersToCopyOver)
+
+    siteGenerator.on('error', e => logger.error(e, 'error in site generator'))
 
     try {
         for await (const plugin of loadPlugins()) {
@@ -295,7 +304,7 @@ async function main(server, delegate = {}) {
         siteGenerator.dispose()
     })
 
-    server.on('request', handleRequest)
+    server.on('request', handleRequest, siteGenerator)
 
     delegate.broadcast = async function (content, filePath) {
         for await (const socket of hotReloadNamespace.sockets.values()) {
@@ -322,7 +331,7 @@ async function main(server, delegate = {}) {
     Array('add', 'change').forEach(event => {
         chokidar.watch(PAGES).on(event, async (filePath, stats) => {
             const relativePath = relative(PAGES, filePath)
-            await broadcast(filePath, relativePath, hotReloadNamespace, delegate)
+            await broadcast(filePath, relativePath, hotReloadNamespace, delegate, siteGenerator)
         })
     })
 
@@ -339,4 +348,5 @@ export {
     FetchRequest,
     FetchResponse,
     SiteGenerator,
+    handleRequest
 }

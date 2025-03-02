@@ -7,7 +7,11 @@ class FragmentPage extends Page {
         super(rootFolder, filePath, template, new TemplateLiteralRenderer())
         this.title = 'Page that includes a fragment'
         this.layout = './test/html/layout.html'
+        this.component = {
+            name: null
+        }
     }
+
     async get (req, res) {
         await this.render({
             component: {

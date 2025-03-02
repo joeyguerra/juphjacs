@@ -29,4 +29,3 @@ await test('SiteGenerator', async t => {
         await rm(siteFolder, { recursive: true, force: true })
     })
 })
-

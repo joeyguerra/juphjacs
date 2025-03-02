@@ -44,8 +44,11 @@ class Page {
             acc[key] = context[key]
             return acc
         }, this)
-
-        this.content = await this.renderer.render(this.template, this)
+        try {
+            this.content = await this.renderer.render(this.template, this)
+        } catch (e) {
+            throw e
+        }
         if (this.layout) {
             this.layout = resolve(this.layout)
             const layoutHtml = await readFile(this.layout, 'utf-8')

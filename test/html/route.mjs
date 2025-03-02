@@ -6,6 +6,7 @@ class RoutePage extends Page {
         super(rootFolder, filePath, template, new TemplateLiteralRenderer())
         this.title = 'Routing page'
         this.layout = './test/html/layout.html'
+        this.param = null
     }
 
     async get(req, res) {
