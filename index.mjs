@@ -222,9 +222,15 @@ async function handleRequest(req, res) {
             }
         } catch (e) {
             logger.error(`Serving file: ${e.message} for ${req.urlParsed.pathname} in ${SITE_FOLDER}`)
-            res.statusCode = 500
-            res.end('Internal Server Error')
-            req.destroy()
+            if (e.code === 'ENOENT') {
+                res.statusCode = 404
+                res.end('Not found')
+                req.destroy()
+            } else {
+                res.statusCode = 500
+                res.end('Internal Server Error')
+                req.destroy()
+            }
         }
     } catch (e) {
         logger.error(`Error in request handler ${e}`)
