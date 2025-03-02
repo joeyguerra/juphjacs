@@ -92,7 +92,7 @@ class SiteGenerator extends EventEmitter {
                 this.emit('error', { file, error: e })
             }
         }
-        this.emit(EVENTS.STATIC_SITE_GENERATED, this.routes, this.layouts)
+        this.emit(EVENTS.STATIC_SITE_GENERATED, this)
     }
 
     static isMarkdown(file) {
