@@ -192,9 +192,9 @@ async function handleRequest(req, res) {
         const ext = extname(req.urlParsed.pathname).substring(1)
         const isHoneypot = honeypoturls.includes(join(SITE_FOLDER, req.urlParsed.pathname))
         if (isHoneypot) {
-            logger.info({ message: 'honeypot', url: req.urlParsed.pathname, status: 404 }, 'honeypot')
-            res.statusCode = 404
-            res.end('Not found')
+            logger.info({ message: 'honeypot', url: req.urlParsed.pathname, status: 200 }, 'honeypot')
+            res.statusCode = 200
+            res.end('Ok')
             return req.destroy()
         }
 
