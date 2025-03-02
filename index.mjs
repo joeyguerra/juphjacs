@@ -198,6 +198,13 @@ async function handleRequest(req, res) {
             return req.destroy()
         }
 
+        const method = req.method.toLowerCase()
+        const page = siteGenerator.pages.values().find(page => page.route.test(req.urlParsed.pathname))
+        if (page && page[method]) {
+            await page[method](req, res)
+            return
+        }
+
         try {
             const stats = await stat(join(SITE_FOLDER, req.urlParsed.pathname), constants.F_OK)
             if (!stats.isDirectory()) {
