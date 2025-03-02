@@ -152,7 +152,7 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, delegate, s
         changedPage.template = content
     }
 
-    const generatedPage = await siteGenerator.genFile(filePath, req, res, delegate)
+    const generatedPage = await siteGenerator.genFile(filePath, delegate)
 
     for await (const socket of clientsOnPage) {
         const requestFromWebSocketConnection = createFetchRequestFromSocket(socket)
@@ -266,10 +266,6 @@ async function main(server, delegate = {}) {
         logger.warn(e.message)
     }
 
-    const req = new FetchRequest()
-    req.url = 'http://localhost/'
-
-    const res = new FetchResponse(req)
     const io = new SocketServer(server)
     const hotReloadNamespace = io.of('/hot-reload')
 
@@ -331,7 +327,7 @@ async function main(server, delegate = {}) {
         }
     }
 
-    await siteGenerator.generateStaticSite(req, res, delegate)
+    await siteGenerator.generateStaticSite(delegate)
 
     Array('add', 'change').forEach(event => {
         chokidar.watch(PAGES).on(event, async (filePath, stats) => {

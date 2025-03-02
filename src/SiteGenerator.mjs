@@ -69,7 +69,7 @@ class SiteGenerator extends EventEmitter {
         }
     }
 
-    async generateStaticSite(req, res, delegate) {
+    async generateStaticSite(delegate) {
         try{await mkdir(this.siteFolder)}catch(e){}
         
         for await (let file of this.filesToCopyOver ?? []) {
@@ -87,7 +87,7 @@ class SiteGenerator extends EventEmitter {
         for await (const file of this.readAllFiles(this.pagesFolder)) {
             let ext = extname(file)
             try {
-                await this.genFile(file, req, res, delegate)
+                await this.genFile(file, delegate)
             } catch (e) {
                 this.emit('error', { file, error: e })
             }
@@ -146,7 +146,7 @@ class SiteGenerator extends EventEmitter {
         return await module?.default(pagesFolder, filePath, template, delegate)
     }
     
-    async genFile(file, req, res, delegate) {
+    async genFile(file, delegate) {
         // TODO: This strategy is not robust. It might need to be improved.
         if (file.includes('layout')) return
         let ext = extname(file)

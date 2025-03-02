@@ -14,12 +14,13 @@ await test('Handle Requests', async t => {
         const pagesFolder = join(__dirname, 'html')
         const siteFolder = join(rootFolder, 'site-for-pretty-url')
         await mkdir(siteFolder, { recursive: true })
+        const siteGenerator = new SiteGenerator(__dirname, pagesFolder, siteFolder)
+        await siteGenerator.generateStaticSite(null)
+        
         const req = new IncomingMessage()
         req.method = 'GET'
         req.url = '/pretty-url-routing'
         const res = new ServerResponse(req)
-        const siteGenerator = new SiteGenerator(__dirname, pagesFolder, siteFolder)
-        await siteGenerator.generateStaticSite(req, res)
         await handleRequest(req, res, siteGenerator)
         assert.equal(res.statusCode, 200)
         assert.equal(res.statusMessage, 'OK')

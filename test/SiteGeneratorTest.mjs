@@ -16,9 +16,7 @@ await test('SiteGenerator', async t => {
         const filesToCopyOver = [{ from: join(pagesFolder, 'index.html'), to: join(siteFolder, 'index.html') }]
         const foldersToCopyOver = ['css', 'images']
         const generator = new SiteGenerator(rootFolder, pagesFolder, siteFolder, filesToCopyOver, foldersToCopyOver)
-        const req = new IncomingMessage()
-        const res = new ServerResponse(req)
-        await generator.generateStaticSite(req, res)
+        await generator.generateStaticSite(null)
         const files = []
         for await (let file of await generator.readAllFiles(siteFolder)) {
             files.push(file)
