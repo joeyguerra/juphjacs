@@ -4,33 +4,35 @@ import { MarkdownRenderer } from './MarkdownRenderer.mjs'
 import { UriToStaticFileRoute } from './UriToStaticFileRoute.mjs'
 
 class MarkdownPage extends Page {
-    constructor (filePath, pagesFolder, template) {
-        super(pagesFolder, filePath, template)
+    constructor (filePath, pagesFolder, delegate) {
+        super(pagesFolder, filePath, delegate)
         this.renderer = new MarkdownRenderer()
     }
 
     async get(req, res) {
-        await this.render()
+        const content = await this.render()
         res.setHeader('Content-Type', 'text/html')
-        res.end(this.content)
+        res.end(content)
     }
 
     async render() {
-        const content = await readFile(this.filePath, 'utf-8')
+        let content = await readFile(this.filePath, 'utf-8')
         process.emit(EVENTS.PRE_TEMPLATE_RENDER, this.filePath, this)
         
-        this.content = await this.renderer.render(content, this)
+        content = await this.renderer.render(content, this)
         if (this.layout) {
-            const layout = new Page(this.pagesFolder, this.layout, this.template)
+            const layout = new Page(this.pagesFolder, this.layout, this.delegate)
             layout.renderer = this.renderer
-            await layout.render()
-            this.content = layout.content
+            const context = Object.keys(this).reduce((acc, key) => {
+                acc[key] = this[key]
+                return acc
+            }, {body: content})
+            content = await layout.render(context)
         }
         const htmlFilePath = this.filePath.replace('.md', '.html')
         this.route = new UriToStaticFileRoute(htmlFilePath.replace(this.pagesFolder, ''), htmlFilePath)
         process.emit(EVENTS.TEMPLATE_RENDERED, this.route.filePath, this)
-        
-        return this.content
+        return content
     }
 }
 

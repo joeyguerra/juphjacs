@@ -8,7 +8,6 @@ class RedirectPage extends Page {
         this.layout = './test/html/layout.html'
     }
     async get (req, res) {
-        await this.render()
         res.statusCode = 302
         res.setHeader('Set-Cookie', 'theme=light; Path=/; HttpOnly')
         res.setHeader('Location', 'http://localhost/cookie')

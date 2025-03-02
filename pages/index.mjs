@@ -11,8 +11,8 @@ class IndexPage extends Page {
     }
     
     async get (req, res) {
-        await this.render()
-        res.end(this.content)
+        let content = await this.render()
+        res.end(content)
     }
 }
 

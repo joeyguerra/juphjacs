@@ -245,7 +245,9 @@ async function main(server, delegate = {}) {
 
     const siteGenerator = new SiteGenerator(rootFolder, PAGES, SITE_FOLDER, filesToCopyOver, foldersToCopyOver)
 
-    siteGenerator.on('error', e => logger.error(e, 'error in site generator'))
+    siteGenerator.on('error', e => {
+        logger.error(`${e.error} in ${e.file}`, 'error in site generator')
+    })
 
     try {
         for await (const plugin of loadPlugins()) {

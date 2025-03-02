@@ -12,24 +12,24 @@ class LoginPage extends Page {
     }
     
     async get (req, res) {
-        await this.render()
-        res.end(this.content)
+        let content = await this.render()
+        res.end(content)
     }
 
     async post(req, res) {
         const { username, password, remember, csrf } = await req.json()
 
+        const content = await this.render()
         if (username === 'admin' && password === 'admin'
             && csrf === this.generatedCsrf) {
             res.statusCode = 302
             res.setHeader('Set-Cookie', 'session=admin')
             res.setHeader('Location', '/admin.html')
-            res.end(this.content)
+            res.end(content)
             return
         }
         this.error = 'Invalid credentials'
-        await this.render()
-        await res.end(this.content)
+        await res.end(content)
     }
 
 }

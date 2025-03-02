@@ -9,10 +9,10 @@ class SitemapPage extends Page {
     }
 
     async get (req, res) {
-        await this.render()
+        const content = await this.render()
         res.setHeader('Content-Type', 'text/xml')
         res.statusCode = 200
-        res.end(this.content)
+        res.end(content)
     }
 }
 

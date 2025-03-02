@@ -12,9 +12,9 @@ class RoutePage extends Page {
     async get(req, res) {
         const id = req.url.split('/').pop()
         this.param = id
-        await this.render()
+        const content = await this.render()
         res.setHeader('Content-Type', 'text/html')
-        res.end(this.content)
+        res.end(content)
     }
     async post(req, res) {
         const buffers = []
@@ -24,17 +24,17 @@ class RoutePage extends Page {
         const data = Buffer.concat(buffers).toString()
         const formData = new URLSearchParams(data)
         const param = formData.get('param')
-        await this.render(Object.assign({}, this.context, { param }))
+        const content = await this.render(Object.assign({}, this.context, { param }))
         res.setHeader('Content-Type', 'text/html')
-        res.end(this.content)
+        res.end(content)
     }
 
     async put(req, res) {
         const param = (await req.json()).param
-        await this.render({ param })
+        const content = await this.render({ param })
         res.setHeader('Content-Type', 'text/html')
         res.statusCode = 201
-        res.end(this.content)
+        res.end(content)
     }
 
     async delete(req, res) {

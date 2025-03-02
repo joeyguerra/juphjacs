@@ -22,9 +22,9 @@ class CookiePage extends Page {
             }, {})
         }
         
-        await this.render()
+        const content = await this.render()
         res.setHeader('Content-Type', 'text/html')
-        res.end(this.content)
+        res.end(content)
     }
 }
 

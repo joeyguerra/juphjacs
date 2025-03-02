@@ -89,7 +89,7 @@ class SiteGenerator extends EventEmitter {
             try {
                 await this.genFile(file, req, res, delegate)
             } catch (e) {
-                this.emit('error', { file, error: e })
+                this.emit('error', e)
             }
         }
         this.emit(EVENTS.STATIC_SITE_GENERATED, this.routes, this.layouts)
@@ -103,20 +103,6 @@ class SiteGenerator extends EventEmitter {
         const key = filePath.replace(pagesFolder, '').replace('.md', '.html')
         if (this.pages.has(key)) {
             return this.pages.get(key)
-        }
-
-        let template = ''
-        try {
-            template = await readFile(filePath, 'utf-8')
-        } catch (e) {
-            if (process.env.DEBUG === 'debug') {
-                if (e.code === 'ENOENT') {
-                    logger.info(`No file found for ${filePath}`)
-                } else {
-                    logger.info(`Reading File: ${e}`)
-                }
-                
-            }
         }
         
         let module = null
@@ -138,12 +124,12 @@ class SiteGenerator extends EventEmitter {
         
         if (!module) {
             if (SiteGenerator.isMarkdown(filePath)) {
-                return new MarkdownPage(filePath, pagesFolder, template, delegate)
+                return new MarkdownPage(filePath, pagesFolder, delegate)
             }
-            return new Page(pagesFolder, filePath, template, delegate)
+            return new Page(pagesFolder, filePath, delegate)
         }
 
-        return await module?.default(pagesFolder, filePath, template, delegate)
+        return await module?.default(pagesFolder, filePath, delegate)
     }
     
     async genFile(file, req, res, delegate) {
@@ -156,7 +142,7 @@ class SiteGenerator extends EventEmitter {
         await mkdir(dirname(newFileName), { recursive: true })
 
         const page = await this.getPage(file, this.pagesFolder, delegate)
-        await page.render()
+        const content = await page.render()
 
         if (page.layout) {
             const keyName = resolve(this.pagesFolder, page.layout)
@@ -169,9 +155,9 @@ class SiteGenerator extends EventEmitter {
         }
 
         const importRegex = /import\s+{[^}]+}\s+from\s+['"]([^'"]+\.mjs)['"]/g
-        if (page.content.includes('import') || page.content.includes('require')) {
+        if (content.includes('import') || content.includes('require')) {
             let match = null
-            while ((match = importRegex.exec(page.content)) !== null) {
+            while ((match = importRegex.exec(content)) !== null) {
                 let keyName = resolve(this.pagesFolder, match[1].replace(/^\//, ''))
                 let key = this.localImports.get(keyName)
                 if (!key) {
@@ -183,9 +169,9 @@ class SiteGenerator extends EventEmitter {
         }
 
         const cssRegex = /<link[^>]+href="(?!http|https)([^"]+\.css)"[^>]*>/g
-        if (page.content.includes('<link')) {
+        if (content.includes('<link')) {
             let match = null
-            while ((match = cssRegex.exec(page.content)) !== null) {
+            while ((match = cssRegex.exec(content)) !== null) {
                 let keyName = resolve(this.pagesFolder, 'css', match[1].replace(/^\//, ''))
                 let key = this.localImports.get(keyName)
                 if (!key) {
@@ -197,9 +183,9 @@ class SiteGenerator extends EventEmitter {
         }
 
         const scriptRegex = /<script[^>]+src="(?!http|https)([^"]+)"[^>]*><\/script>/g
-        if (page.content.includes('<script')) {    
+        if (content.includes('<script')) {    
             let match = null
-            while ((match = scriptRegex.exec(page.content)) !== null) {    
+            while ((match = scriptRegex.exec(content)) !== null) {    
                 let keyName = resolve(this.pagesFolder, 'js', match[1].replace(/^\//, ''))
                 let key = this.localImports.get(keyName)
                 if (!key) {
@@ -215,7 +201,7 @@ class SiteGenerator extends EventEmitter {
         }
 
         this.pagesIndex.add(key)
-        await writeFile(newFileName, page.content)
+        await writeFile(newFileName, content)
         return page
     }
 }

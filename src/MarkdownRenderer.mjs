@@ -17,14 +17,15 @@ class MarkdownRenderer extends TemplateLiteralRenderer {
     }
 
     async render(content, initialContext = {}) {
-        let data = ''
+        let body = content
         if (content.startsWith('---')) {
             const parts = content.split('---')
             const frontMatter = parts[1].trim()
             const fn = new Function(`return ${frontMatter}`)
             Object.assign(initialContext, fn())
-            data = this.markdown.render(parts[2])
+            body = parts[2]
         }
+        const data = this.markdown.render(body)
         return super.render(data, initialContext)
     }
 }

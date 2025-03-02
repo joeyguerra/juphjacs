@@ -11,8 +11,8 @@ class BlogIndexPage extends Page {
     }
     
     async get (req, res) {
-        await this.render()
-        res.end(this.content)
+        const content = await this.render()
+        res.end(content)
     }
 }
 

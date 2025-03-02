@@ -13,8 +13,8 @@ class LogoutPage extends Page {
     
     async get (req, res) {
         res.setHeader('Set-Cookie', 'session=; Max-Age=0')
-        await this.render()
-        res.end(this.content)
+        const content = await this.render()
+        res.end(content)
     }
 }
 

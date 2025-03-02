@@ -10,11 +10,9 @@ const EVENTS = {
 }
 
 class Page {
-    constructor (pagesFolder, filePath, template, delegate = {broadcast: async () => {}}) {
+    constructor (pagesFolder, filePath, delegate = {broadcast: async () => {}}) {
         this.pagesFolder = pagesFolder
         this.filePath = filePath
-        this.template = template
-        this.content = null
         this.contentType = 'text/html'
         this.renderer = new TemplateLiteralRenderer()
         this.delegate = delegate
@@ -34,9 +32,7 @@ class Page {
         }
         return ''
     }
-    async render (context = {}) {
-        context = this.clearBodyFromPreviousRenders(context)
-        
+    async render (context = {}) {  
         process.emit(EVENTS.PRE_TEMPLATE_RENDER, this.filePath, this)
 
         // Set context properties to this Page instance so that the API for interacting with the Page is "easy".
@@ -44,15 +40,19 @@ class Page {
             acc[key] = context[key]
             return acc
         }, this)
+
+        const template = await readFile(this.filePath, 'utf-8')
+        let content = ''
+
         try {
-            this.content = await this.renderer.render(this.template, this)
+            content = await this.renderer.render(template, this)
         } catch (e) {
             throw e
         }
         if (this.layout) {
             this.layout = resolve(this.layout)
             const layoutHtml = await readFile(this.layout, 'utf-8')
-            this.content = await (new TemplateLiteralRenderer()).render(layoutHtml, { body: this.content, ...this })
+            content = await (new TemplateLiteralRenderer()).render(layoutHtml, { body: content, ...this })
         }
 
         if (this.route && this.route.test && !(this.route instanceof UriToStaticFileRoute)) {
@@ -73,7 +73,7 @@ class Page {
         }
         process.emit(EVENTS.TEMPLATE_RENDERED, this.route.filePath, this)
 
-        return this
+        return content
     }
 
     clearBodyFromPreviousRenders (context) {

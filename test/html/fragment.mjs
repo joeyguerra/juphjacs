@@ -13,12 +13,12 @@ class FragmentPage extends Page {
     }
 
     async get (req, res) {
-        await this.render({
+        const content = await this.render({
             component: {
                 name: 'This is the component name'
             }
         })
-        res.end(this.content)
+        res.end(content)
     }
 }
 export default async (rootFolder, filePath, template) => {

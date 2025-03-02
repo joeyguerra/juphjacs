@@ -8,8 +8,8 @@ class IndexPage extends Page {
         this.layout = './test/html/layout.html'
     }
     async get (req, res) {
-        await this.render()
-        res.end(this.content)
+        const content = await this.render()
+        res.end(content)
     }
 }
 export default async (rootFolder, filePath, template) => {
