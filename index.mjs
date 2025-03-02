@@ -62,6 +62,10 @@ const CONTENT_TYPE = {
     webp: 'image/webp',
     xml: 'application/xml'
 }
+
+const shortCircuitUrls = ['socket.io']
+const honeypoturls = []
+
 const middlewares = new Set()
 const filesToCopyOver = Array.from([
     {
@@ -166,6 +170,63 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, delegate) {
     }
 }
 
+async function handleRequest(req, res) {
+    try {
+        req.urlParsed = new URL(req.url ?? '/', `http://${req.headers?.host ?? 'localhost'}`)
+
+        if (shortCircuitUrls.some(shortCircuitUrl => req.urlParsed.pathname.includes(shortCircuitUrl))) {
+            return
+        }
+
+        let coreClientSiteCode = new CoreClientSiteCode(req.urlParsed.pathname, rootFolder, req)
+        if (coreClientSiteCode.pipe(res)) {
+            return
+        }
+
+        for await (const middleware of middlewares.values()) {
+            await middleware(req, res)
+        }
+
+        req.urlParsed.pathname = ifSlashAddIndex(req.urlParsed.pathname)
+
+        const ext = extname(req.urlParsed.pathname).substring(1)
+        const isHoneypot = honeypoturls.includes(join(SITE_FOLDER, req.urlParsed.pathname))
+        if (isHoneypot) {
+            logger.info({ message: 'honeypot', url: req.urlParsed.pathname, status: 404 }, 'honeypot')
+            res.statusCode = 404
+            res.end('Not found')
+            return req.destroy()
+        }
+
+        try {
+            const stats = await stat(join(SITE_FOLDER, req.urlParsed.pathname), constants.F_OK)
+            if (!stats.isDirectory()) {
+                res.setHeader('Content-Type', CONTENT_TYPE[ext] ?? 'text/plain')
+                res.statusCode = 200
+                const stream = createReadStream(join(SITE_FOLDER, req.urlParsed.pathname))
+                stream.on('finish', () => {
+                    req.destroy()
+                })
+                return stream.pipe(res)
+            } else {
+                res.statusCode = 404
+                res.end('Not found')
+                return req.destroy()
+            }
+        } catch (e) {
+            logger.error(`Serving file: ${e.message} for ${req.urlParsed.pathname} in ${SITE_FOLDER}`)
+            res.statusCode = 500
+            res.end('Internal Server Error')
+            req.destroy()
+        }
+    } catch (e) {
+        logger.error(`Error in request handler ${e}`)
+        res.statusCode = 500
+        res.end('Internal Server Error')
+        req.destroy()
+    }
+}
+
 async function main(server, delegate = {}) {
     if (!delegate) {
         delegate = {}
@@ -192,8 +253,6 @@ async function main(server, delegate = {}) {
 
     const res = new FetchResponse(req)
     const io = new SocketServer(server)
-    const shortCircuitUrls = ['socket.io']
-    const honeypoturls = []
     const hotReloadNamespace = io.of('/hot-reload')
 
     //TODO: Need to change the strategy for triggering file changes for layout files.
@@ -223,63 +282,7 @@ async function main(server, delegate = {}) {
         siteGenerator.dispose()
     })
 
-    server.on('request', async (req, res) => {
-        try {
-            req.urlParsed = new URL(req.url ?? '/', `http://${req.headers?.host ?? 'localhost'}`)
-
-            if (shortCircuitUrls.some(shortCircuitUrl => req.urlParsed.pathname.includes(shortCircuitUrl))) {
-                return
-            }
-
-            let coreClientSiteCode = new CoreClientSiteCode(req.urlParsed.pathname, rootFolder, req)
-            if (coreClientSiteCode.pipe(res)) {
-                return
-            }
-
-            for await (const middleware of middlewares.values()) {
-                await middleware(req, res)
-            }
-
-            req.urlParsed.pathname = ifSlashAddIndex(req.urlParsed.pathname)
-
-            const ext = extname(req.urlParsed.pathname).substring(1)
-            const isHoneypot = honeypoturls.includes(join(SITE_FOLDER, req.urlParsed.pathname))
-            if (isHoneypot) {
-                logger.info({ message: 'honeypot', url: req.urlParsed.pathname, status: 404 }, 'honeypot')
-                res.statusCode = 404
-                res.end('Not found')
-                return req.destroy()
-            }
-
-            try {
-                const stats = await stat(join(SITE_FOLDER, req.urlParsed.pathname), constants.F_OK)
-                if (!stats.isDirectory()) {
-                    res.setHeader('Content-Type', CONTENT_TYPE[ext] ?? 'text/plain')
-                    res.statusCode = 200
-                    const stream = createReadStream(join(SITE_FOLDER, req.urlParsed.pathname))
-                    stream.on('finish', () => {
-                        req.destroy()
-                    })
-                    return stream.pipe(res)
-                } else {
-                    res.statusCode = 404
-                    res.end('Not found')
-                    return req.destroy()
-                }
-            } catch (e) {
-                logger.error(`Serving file: ${e.message} for ${req.urlParsed.pathname} in ${SITE_FOLDER}`)
-                res.statusCode = 500
-                res.end('Internal Server Error')
-                req.destroy()
-            }
-        } catch (e) {
-            logger.error(`Error in request handler ${e}`)
-            res.statusCode = 500
-            res.end('Internal Server Error')
-            req.destroy()
-        } finally {
-        }
-    })
+    server.on('request', handleRequest)
 
     delegate.broadcast = async function (content, filePath) {
         for await (const socket of hotReloadNamespace.sockets.values()) {
