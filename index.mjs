@@ -168,80 +168,73 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, delegate, s
 }
 
 async function handleRequest(req, res, siteGenerator) {
+    req.urlParsed = new URL(req.url ?? '/', `http://${req.headers?.host ?? 'localhost'}`)
+
+    if (shortCircuitUrls.some(shortCircuitUrl => req.urlParsed.pathname.includes(shortCircuitUrl))) {
+        return
+    }
+
+    let coreClientSiteCode = new CoreClientSiteCode(req.urlParsed.pathname, rootFolder, req, logger)
+    if (coreClientSiteCode.pipe(res)) {
+        return
+    }
+
+    for await (const middleware of middlewares.values()) {
+        await middleware(req, res)
+    }
+
+    req.urlParsed.pathname = ifSlashAddIndex(req.urlParsed.pathname)
+
+    const isHoneypot = honeypoturls.includes(join(siteGenerator.siteFolder, req.urlParsed.pathname))
+    if (isHoneypot) {
+        logger.info({ message: 'honeypot', url: req.urlParsed.pathname, status: 200 }, 'honeypot')
+        res.statusCode = 200
+        res.end('Ok')
+        return req.destroy()
+    }
+
+    const method = req.method.toLowerCase()
+    const page = siteGenerator.pages.values().find(page => page.route.test(req.urlParsed.pathname))
+    if (page && page[method]) {
+        await page[method](req, res)
+        return
+    }
+
+    let fileToLoad = join(siteGenerator.siteFolder, req.urlParsed.pathname)
+    const ext = extname(req.urlParsed.pathname).substring(1)
+    let contentType = CONTENT_TYPE[ext] ?? 'text/plain'
+    if (page) {
+        fileToLoad = page.filePath.replace(siteGenerator.pagesFolder, siteGenerator.siteFolder)
+        contentType = page.contentType
+    }
+
     try {
-        req.urlParsed = new URL(req.url ?? '/', `http://${req.headers?.host ?? 'localhost'}`)
-
-        if (shortCircuitUrls.some(shortCircuitUrl => req.urlParsed.pathname.includes(shortCircuitUrl))) {
-            return
-        }
-
-        let coreClientSiteCode = new CoreClientSiteCode(req.urlParsed.pathname, rootFolder, req, logger)
-        if (coreClientSiteCode.pipe(res)) {
-            return
-        }
-
-        for await (const middleware of middlewares.values()) {
-            await middleware(req, res)
-        }
-
-        req.urlParsed.pathname = ifSlashAddIndex(req.urlParsed.pathname)
-
-        const isHoneypot = honeypoturls.includes(join(siteGenerator.siteFolder, req.urlParsed.pathname))
-        if (isHoneypot) {
-            logger.info({ message: 'honeypot', url: req.urlParsed.pathname, status: 200 }, 'honeypot')
+        const stats = await stat(fileToLoad, constants.F_OK)
+        if (!stats.isDirectory()) {
+            res.setHeader('Content-Type', contentType)
             res.statusCode = 200
-            res.end('Ok')
+            res.statusMessage = 'OK'
+            const stream = createReadStream(fileToLoad)
+            stream.on('finish', () => {
+                req.destroy()
+            })
+            return stream.pipe(res)
+        } else {
+            res.statusCode = 404
+            res.end('Not found')
             return req.destroy()
         }
-
-        const method = req.method.toLowerCase()
-        const page = siteGenerator.pages.values().find(page => page.route.test(req.urlParsed.pathname))
-        if (page && page[method]) {
-            await page[method](req, res)
-            return
-        }
-
-        let fileToLoad = join(siteGenerator.siteFolder, req.urlParsed.pathname)
-        const ext = extname(req.urlParsed.pathname).substring(1)
-        let contentType = CONTENT_TYPE[ext] ?? 'text/plain'
-        if (page) {
-            fileToLoad = page.filePath.replace(siteGenerator.pagesFolder, siteGenerator.siteFolder)
-            contentType = page.contentType
-        }
-
-        try {
-            const stats = await stat(fileToLoad, constants.F_OK)
-            if (!stats.isDirectory()) {
-                res.setHeader('Content-Type', contentType)
-                res.statusCode = 200
-                res.statusMessage = 'OK'
-                const stream = createReadStream(fileToLoad)
-                stream.on('finish', () => {
-                    req.destroy()
-                })
-                return stream.pipe(res)
-            } else {
-                res.statusCode = 404
-                res.end('Not found')
-                return req.destroy()
-            }
-        } catch (e) {
-            logger.error(`Serving file: ${e.message} for ${req.urlParsed.pathname} in ${SITE_FOLDER}`)
-            if (e.code === 'ENOENT') {
-                res.statusCode = 404
-                res.end('Not found')
-                req.destroy()
-            } else {
-                res.statusCode = 500
-                res.end('Internal Server Error')
-                req.destroy()
-            }
-        }
     } catch (e) {
-        logger.error(`Error in request handler ${e}`)
-        res.statusCode = 500
-        res.end('Internal Server Error')
-        req.destroy()
+        logger.error(`Serving file: ${e.message} for ${req.urlParsed.pathname} in ${SITE_FOLDER}`)
+        if (e.code === 'ENOENT') {
+            res.statusCode = 404
+            res.end('Not found')
+            req.destroy()
+        } else {
+            res.statusCode = 500
+            res.end('Internal Server Error')
+            req.destroy()
+        }
     }
 }
 
@@ -304,7 +297,16 @@ async function main(server, delegate = {}) {
         siteGenerator.dispose()
     })
 
-    server.on('request', handleRequest, siteGenerator)
+    server.on('request', async (req, res) => {
+        try {
+            await handleRequest(req, res, siteGenerator)
+        } catch (e) {
+            logger.error(`Error in request handler ${e}`)
+            res.statusCode = 500
+            res.end('Internal Server Error')
+            req.destroy()
+        }
+    })
 
     delegate.broadcast = async function (content, filePath) {
         for await (const socket of hotReloadNamespace.sockets.values()) {
