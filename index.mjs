@@ -178,7 +178,7 @@ async function handleRequest(req, res) {
             return
         }
 
-        let coreClientSiteCode = new CoreClientSiteCode(req.urlParsed.pathname, rootFolder, req)
+        let coreClientSiteCode = new CoreClientSiteCode(req.urlParsed.pathname, rootFolder, req, logger)
         if (coreClientSiteCode.pipe(res)) {
             return
         }

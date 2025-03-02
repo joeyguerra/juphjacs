@@ -3,11 +3,12 @@ import { createReadStream } from 'node:fs'
 
 class CoreClientSiteCode {
     #fileMap = new Map()
-    constructor(pathName, root, req) {
+    constructor(pathName, root, req, logger) {
         this.pathName = pathName
         this.root = root
         this.req = req
         this.filePath = null
+        this.logger = logger
         this.#fileMap = new Map([
             ['/js/morphdom-esm.js', join(this.root, 'node_modules/morphdom/dist/morphdom-esm.js')],
             ['/js/HotReloader.mjs', join(this.root, 'src/HotReloader.mjs')]
@@ -25,7 +26,7 @@ class CoreClientSiteCode {
             this.req.destroy()
         })
         this.stream.on('error', e => {
-            logger.error(`Error in CoreClientSiteCode: ${e.message}`)
+            this.logger.error(`Error in CoreClientSiteCode: ${e.message}`)
             this.req.destroy()
         })
     }
