@@ -322,7 +322,7 @@ async function main(server, delegate = {}) {
             if (page && page.route.filePath === filePath) {
                 socket.emit('file changed', { fileThatTriggeredIt: filePath, fileName: filePath, data: page.content })
             } else {
-                logger.debug({ message: 'No page found', filePath, url: requestFromWebSocketConnection.url }, 'broadcast')
+                // logger.debug({ message: 'No page found', filePath, url: requestFromWebSocketConnection.url }, 'broadcast')
             }
         }
     }
