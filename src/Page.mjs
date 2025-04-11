@@ -60,7 +60,7 @@ class Page {
             this.content = await (new TemplateLiteralRenderer()).render(layoutHtml, { body: this.content, ...layoutModule, ...this })
         }
 
-        if (typeof(this.route) === 'string') {
+        if (typeof(this.route) === 'string' || this.route instanceof RegExp) {
             this.route = new UriToStaticFileRoute(this.route, this.filePath)
         }
 
