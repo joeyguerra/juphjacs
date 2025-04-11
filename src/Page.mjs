@@ -1,6 +1,5 @@
 import { UriToStaticFileRoute } from './UriToStaticFileRoute.mjs'
-import { readFileSync } from 'node:fs'
-import { readFile, access } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { TemplateLiteralRenderer } from './TemplateLiteralRenderer.mjs'
 
@@ -17,6 +16,7 @@ class Page {
         this.content = null
         this.contentType = 'text/html'
         this.renderer = new TemplateLiteralRenderer()
+        this.route = new UriToStaticFileRoute(this.filePath.replace(this.pagesFolder, '').replace(/\\/g, '/'), this.filePath)
         this.delegate = delegate
     }
 
@@ -52,15 +52,12 @@ class Page {
         if (this.layout) {
             this.layout = resolve(this.layout)
             const layoutHtml = await readFile(this.layout, 'utf-8')
-            this.content = await (new TemplateLiteralRenderer()).render(layoutHtml, { body: this.content, ...this })
-        }
-
-        if (this.route && this.route.test && !(this.route instanceof UriToStaticFileRoute)) {
-            this.route = new UriToStaticFileRoute(this.route, this.filePath)
-        }
-
-        if (!this.route) {
-            this.route = new UriToStaticFileRoute(this.filePath.replace(this.pagesFolder, '').replace(/\\/g, '/'), this.filePath)
+            let layoutModule = {}
+            try {
+                layoutModule = await (await import(this.layout.replace(/\.(html|xml)$/, '.mjs'))).default(this.pagesFolder, this.layout, layoutHtml, this.delegate)
+            } catch (e) {
+            }
+            this.content = await (new TemplateLiteralRenderer()).render(layoutHtml, { body: this.content, ...layoutModule, ...this })
         }
 
         if (typeof(this.route) === 'string') {

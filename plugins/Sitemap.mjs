@@ -12,7 +12,7 @@ class Link {
 
 export default async () => {
     process.on(EVENTS.PRE_TEMPLATE_RENDER, async (filePath, page) => {
-        if (filePath.includes('/sitemap.xml')) {
+        if (filePath.includes('sitemap.xml')) {
             page.links = Array.from(links)
         }
     })

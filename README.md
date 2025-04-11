@@ -59,6 +59,36 @@ The name is a play on the KISS Principle (Keep It Simple Stupid). It's super har
 - [Socket.io](pages/layout.html) for comms when a file is updated.
 - [Morphdom](pages/js/HotReloader.mjs) code which gets the `file changed` message from the server and diffs the DOM, swapping out any changed elements.
 
+## Processing Model
+
+### Request/Response
+
+HTML Templates are generated server side and saved to a folder. The routing facility looks in this folder first to serve HTTP requests. Resources like js, css and image files are moved into this folder from the "pages" folder and served. HTML files are either served from this folder or handled by the routing facilit (Pages can define a `route` regular expression). Pages can also provide async methods that match HTTP methods; e.g. `get`, `post`, `put`, `delete`, `options`, `trace`, `head`. The signature is `async get (req, res)`.
+
+### Event Driven
+
+Events on the `SiteGenerator` are emitted when rendering a page.
+
+### Streaming
+
+When a file is changed, `SiteGenerator` will render the Page again. The HTML will be broadcasted via WebSockets to every connected client that is on that page. `morphdom` diffs and updates the DOM where something has changed.
+
+## State Management
+
+This is left to the developer to decide when building applications with this framework.
+
+## Concurrency Model
+
+Built with NodeJS. So it's Node's concurrency model.
+
+## Data Flow
+
+Each Page has access to a `delegate` which provides a `broadcast` method to send messages to clients.
+
+## Communication Pattern
+
+Direct method calls.
+
 # Use
 
 Use the latest version of [Node.js](https://nodejs.org). As of writing, it's `v23.8.0`.

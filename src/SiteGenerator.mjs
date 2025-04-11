@@ -1,6 +1,5 @@
-import { fileURLToPath } from 'node:url'
-import { dirname, extname, join, relative, resolve } from 'node:path'
-import { opendir, mkdir, readFile, writeFile, cp, access, stat } from 'node:fs/promises'
+import { dirname, extname, join, resolve, sep } from 'node:path'
+import { opendir, mkdir, readFile, writeFile, cp, stat } from 'node:fs/promises'
 import EventEmitter from 'node:events'
 
 import { Page } from './Page.mjs'
@@ -13,6 +12,8 @@ const logger = new Logger('SiteGenerator', null, process.env.DEBUG)
 const EVENTS = {
     STATIC_SITE_GENERATED: 'static site generated',
 }
+
+const FILE_EXTENSIONS_TO_EXCLUDE_FOR_COPYING = process.env.FILE_EXTENSIONS_TO_EXCLUDE_FOR_COPYING ?? ['.html', '.xml', '.md', '.mjs', '.js']
 
 class SiteGenerator extends EventEmitter {
     constructor(rootFolder, pagesFolder, siteFolder, filesToCopyOver, foldersToCopyOver) {
@@ -85,7 +86,6 @@ class SiteGenerator extends EventEmitter {
             await this.copyFoldersFrom(join(this.pagesFolder, folder), join(this.siteFolder, folder))
         }
         for await (const file of this.readAllFiles(this.pagesFolder)) {
-            let ext = extname(file)
             try {
                 await this.genFile(file, delegate)
             } catch (e) {
@@ -120,16 +120,17 @@ class SiteGenerator extends EventEmitter {
         }
         
         let module = null
+        const mjsFile = new URL(`file://${filePath.replace(/\.(html|xml|md)$/, '.mjs').replace(/\\/g, '/')}`)
         try {
-            const stats = await stat(filePath.replace(/\.(html|xml|md)$/, '.mjs'))
+            const stats = await stat(mjsFile)
             if (stats.isDirectory()) {
                 return null
             }
-            module = await import(filePath.replace(/\.(html|xml|md)$/, '.mjs'))
+            module = await import(mjsFile)
         } catch (e) {
             if (process.env.DEBUG === 'debug') {
                 if (e.code === 'ENOENT') {
-                    logger.info(`No module found for ${filePath.replace(/\.(html|xml|md)$/, '.mjs')}`)
+                    logger.info(`No module found for ${mjsFile}`)
                 } else {
                     logger.info(`Loading Module: ${e}`)
                 }
@@ -145,12 +146,21 @@ class SiteGenerator extends EventEmitter {
 
         return await module?.default(pagesFolder, filePath, template, delegate)
     }
-    
+    async onlyCopyFilesThatMakeSense(file) {
+        let ext = extname(file)
+        if (FILE_EXTENSIONS_TO_EXCLUDE_FOR_COPYING.includes(ext)) {
+            return null
+        }
+        let newFileName = file.replace(this.pagesFolder, this.siteFolder)
+        await mkdir(dirname(newFileName), { recursive: true })
+        await cp(file, newFileName, { recursive: true })
+        return null
+    }
     async genFile(file, delegate) {
         // TODO: This strategy is not robust. It might need to be improved.
-        if (file.includes('layout')) return
+        if (file.includes('layout')) return null
         let ext = extname(file)
-        if (!['.md', '.html', '.xml'].includes(ext)) return
+        if (!['.md', '.html', '.xml'].includes(ext)) return await this.onlyCopyFilesThatMakeSense(file)
         let key = file.replace('.md', '.html').replace(this.pagesFolder, '')
         let newFileName = file.replace('.md', '.html').replace(this.pagesFolder, this.siteFolder)
         await mkdir(dirname(newFileName), { recursive: true })

@@ -29,7 +29,8 @@ class HotReloader {
             const domFromData = new DOMParser().parseFromString(msg.data, 'text/html')
             morphdom(document.head, domFromData.head, morphdomOptions)
             morphdom(document.body, domFromData.body, morphdomOptions)
-            console.info('morphed', new Date())
+            const event = new CustomEvent('morphed')
+            window.dispatchEvent(event)
         })
         socket.on('disconnect', reason => {
             console.info('Disconnected:', reason)

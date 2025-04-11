@@ -102,7 +102,9 @@ async function* loadPlugins() {
     for await (const file of await opendir(join(rootFolder, 'plugins'))) {
         if (file.isDirectory()) continue
         if (extname(file.name) !== '.mjs') continue
-        yield await import(join(file.parentPath, file.name))
+        const pluginPath = join(file.parentPath, file.name)
+        const fileUrl = new URL(`file://${pluginPath.replace(/\\/g, '/')}`)
+        yield await import(fileUrl)
     }
 }
 
@@ -110,7 +112,9 @@ async function* loadMiddlewares() {
     for await (const file of await opendir(join(rootFolder, 'middlewares'))) {
         if (file.isDirectory()) continue
         if (extname(file.name) !== '.mjs') continue
-        yield await import(join(file.parentPath, file.name))
+        const modulePath = join(file.parentPath, file.name)
+        const fileUrl = new URL(`file://${modulePath.replace(/\\/g, '/')}`)
+        yield await import(fileUrl)
     }
 }
 
@@ -159,7 +163,15 @@ async function broadcast(filePath, relativePath, hotReloadNamespace, delegate, s
         let shouldSkip = false
         const response = new FetchResponse(requestFromWebSocketConnection)
         for await (const middleware of middlewares.values()) {
-            await middleware(requestFromWebSocketConnection, response)
+            for await (const middleware of middlewares.values()) {
+                try {
+                    await middleware(requestFromWebSocketConnection, response)
+                } catch (e) {
+                    logger.error(`Error in middleware ${e} ${e.stack}`)
+                    response.statusCode = 500
+                    response.end('Internal Server Error')
+                }
+            }
             shouldSkip = response.headersSent
         }
         if (shouldSkip) continue
@@ -180,7 +192,15 @@ async function handleRequest(req, res, siteGenerator) {
     }
 
     for await (const middleware of middlewares.values()) {
-        await middleware(req, res)
+        try {
+            await middleware(req, res)
+        } catch (e) {
+            logger.error(`Error in middleware ${e} ${e.stack}`)
+            res.statusCode = 500
+            res.end('Internal Server Error')
+            req.destroy()
+            return
+        }
     }
 
     req.urlParsed.pathname = ifSlashAddIndex(req.urlParsed.pathname)
@@ -248,7 +268,9 @@ async function main(server, delegate = {}) {
         process.emit(SITE_GENERATOR_EVENTS.STATIC_SITE_GENERATED, routes, layouts)
     })
 
-    siteGenerator.on('error', e => logger.error(e, 'error in site generator'))
+    siteGenerator.on('error', e => {
+        logger.error(`${e.file} ${e.error}`, 'error in site generator')
+    })
 
     try {
         for await (const plugin of loadPlugins()) {
