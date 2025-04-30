@@ -11,8 +11,16 @@ const morphdomOptions = {
     },
     onBeforeElUpdated (fromEl, toEl) {
         if (fromEl.nodeName === 'SCRIPT' && toEl.nodeName === 'SCRIPT' && fromEl.id !== 'HotReloader' && toEl.id !== 'HotReloader') {
+            if (fromEl.hasAttribute('src') && fromEl.getAttribute('src').includes('/socket.io')) {
+                return false
+            }
+            if (fromEl.hasAttribute('src')) {
+                toEl.setAttribute('src', toEl.getAttribute('src') + '?v=' + Date.now())
+                fromEl.replaceWith(toEl)
+                return false
+            }
             const script = document.createElement('script')
-            Array(...toEl.attributes).forEach( attr => { script.setAttribute(attr.nodeName ,attr.nodeValue) })
+            Array(...toEl.attributes).forEach( attr => { script.setAttribute(attr.nodeName, attr.nodeValue) })
             script.innerHTML = toEl.innerHTML
             fromEl.replaceWith(script)
             return false

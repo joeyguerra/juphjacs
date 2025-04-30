@@ -269,7 +269,7 @@ async function main(server, delegate = {}) {
     })
 
     siteGenerator.on('error', e => {
-        logger.error(`${e.file} ${e.error}`, 'error in site generator')
+        logger.error(e, 'error in site generator')
     })
 
     try {
@@ -354,6 +354,15 @@ async function main(server, delegate = {}) {
     Array('add', 'change').forEach(event => {
         chokidar.watch(PAGES).on(event, async (filePath, stats) => {
             const relativePath = relative(PAGES, filePath)
+            if (!Array.from(['.html', '.md']).some(ext => relativePath.endsWith(ext))) {
+                if(siteGenerator.localImports.has(filePath)) {
+                    for await (const file of siteGenerator.localImports.get(filePath)) {
+                        await broadcast(file, relative(PAGES, file), hotReloadNamespace, delegate, siteGenerator)
+                    }
+                    return
+                }
+            }
+
             await broadcast(filePath, relativePath, hotReloadNamespace, delegate, siteGenerator)
         })
     })
