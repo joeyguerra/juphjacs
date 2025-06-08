@@ -21,9 +21,10 @@ class MarkdownRenderer extends TemplateLiteralRenderer {
         if (content.startsWith('---')) {
             const parts = content.split('---')
             const frontMatter = parts[1].trim()
+            const restOfContent = parts.slice(2).join('---').trim()
             const fn = new Function(`return ${frontMatter}`)
             Object.assign(initialContext, fn())
-            data = this.markdown.render(parts[2])
+            data = this.markdown.render(restOfContent)
         }
         return super.render(data, initialContext)
     }
