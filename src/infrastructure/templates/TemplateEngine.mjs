@@ -72,6 +72,18 @@ class TemplateEngine {
             obj = Object.getPrototypeOf(obj)
         }
         
+        // Extract variable names from template expressions ${varName}
+        // This allows using ?? operator for undefined variables
+        const templateVarRegex = /\$\{([a-zA-Z_$][a-zA-Z0-9_$]*)/g
+        let match
+        while ((match = templateVarRegex.exec(template)) !== null) {
+            const varName = match[1]
+            // Add variable to keys if not already present and not a keyword
+            if (!allKeys.has(varName) && !this.isJavaScriptKeyword(varName)) {
+                allKeys.add(varName)
+            }
+        }
+        
         // Build the values array in the same order as keys
         const keys = Array.from(allKeys)
         keys.forEach(key => {
@@ -95,6 +107,17 @@ class TemplateEngine {
         } catch (error) {
             throw new Error(`Template rendering error: ${error.message}`)
         }
+    }
+
+    isJavaScriptKeyword(word) {
+        const keywords = [
+            'await', 'break', 'case', 'catch', 'class', 'const', 'continue',
+            'debugger', 'default', 'delete', 'do', 'else', 'export', 'extends',
+            'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+            'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try',
+            'typeof', 'var', 'void', 'while', 'with', 'yield'
+        ]
+        return keywords.includes(word)
     }
 }
 

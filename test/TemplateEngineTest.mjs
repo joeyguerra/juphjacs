@@ -111,4 +111,25 @@ const template2 = \`Another \${var2}\`
         
         assert.ok(result.includes('Default'))
     })
+
+    it('should handle nullish coalescing for undefined variables', async () => {
+        const engine = new TemplateEngine()
+        const template = '<img src="${image ?? \'default.jpg\'}" alt="${alt ?? \'No alt text\'}">'
+        const context = { image: 'photo.jpg' }  // alt is undefined
+        
+        const result = await engine.render(template, context)
+        
+        assert.ok(result.includes('src="photo.jpg"'))
+        assert.ok(result.includes('alt="No alt text"'))
+    })
+
+    it('should handle optional chaining with nullish coalescing', async () => {
+        const engine = new TemplateEngine()
+        const template = '<div>${user?.name ?? \'Guest\'}</div>'
+        const context = {}  // user is undefined
+        
+        const result = await engine.render(template, context)
+        
+        assert.ok(result.includes('Guest'))
+    })
 })
