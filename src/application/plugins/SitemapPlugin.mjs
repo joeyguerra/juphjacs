@@ -3,9 +3,10 @@ import { Plugin } from './Plugin.mjs'
 import { sep } from 'node:path'
 
 class SitemapEntry {
-    constructor({ title, url }) {
+    constructor({ title, url, published = new Date() }) {
         this.title = title
         this.url = url
+        this.published = published
     }
 }
 
@@ -49,7 +50,8 @@ class SitemapPlugin extends Plugin {
         }
         return new SitemapEntry({
             title: page.title,
-            url: this.config.hostname.replace(/\/+$/, '') + '/' + page.uri?.replace(/^\/+/, '')
+            url: this.config.hostname.replace(/\/+$/, '') + '/' + page.uri?.replace(/^\/+/, ''),
+            published: page.published instanceof Date ? page.published : new Date(page.published)
         })
     }
 

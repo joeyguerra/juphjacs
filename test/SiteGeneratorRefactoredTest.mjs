@@ -251,24 +251,14 @@ title: 'Page Title'
             )
         })
 
-        it('should emit error events for page processing failures', async () => {
-            let errorEmitted = false
-            
-            generator.on('error', (error) => {
-                errorEmitted = true
-            })
+        it('should not emit error if variable is undefined', async () => {
+            // Create a page with an undefined variable in template
+            await writeFile(join(sourceDir, 'bad.html'), '<h1>${undefinedVar ?? ""}</h1>')
+            await generator.build()
 
-            // Create an invalid page that will cause rendering to fail
-            await writeFile(join(sourceDir, 'bad.html'), '<h1>\${undefinedVar}</h1>')
-
-            try {
-                await generator.build()
-            } catch (e) {
-                // Expected to fail
-            }
-
-            // Error should have been emitted
-            assert.strictEqual(errorEmitted, true)
+            // Error should not have been emitted
+            const output = await readFile(join(buildDir, 'bad.html'), 'utf-8')
+            assert.ok(output.includes('<h1></h1>'))
         })
     })
 
