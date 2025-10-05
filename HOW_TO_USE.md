@@ -552,7 +552,6 @@ class MyPage extends Page {
 
 ## Getting Help
 
-- **Docs**: Check `USAGE_GUIDE.md` for complete API reference
 - **Examples**: Look at files in `test/html/` for working examples
 - **Architecture**: Read `DEVSERVER_GUIDE.md` for how it works
 

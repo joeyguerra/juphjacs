@@ -177,7 +177,6 @@ node server.mjs
 
 ## Next Steps
 
-- Read **USAGE_GUIDE.md** for complete documentation
 - Read **DEVSERVER_GUIDE.md** for architecture details
 - Create custom plugins
 - Add layouts and nested pages

@@ -23,7 +23,6 @@ Create websites with fast feedback with your code to the left (or right) and a b
 - Plugin system for extensibility (BlogPlugin included)
 - Configuration-driven setup with `site.config.mjs`
 
-**📖 See [USAGE_GUIDE.md](./USAGE_GUIDE.md) for complete documentation!**
 **📖 See [DEVSERVER_GUIDE.md](./DEVSERVER_GUIDE.md) for architecture details!**
 
 The name is a play on the KISS Principle (Keep It Simple Stupid). It's super hard to keep things simple, the name is a reminder to keep trying.
@@ -94,8 +93,6 @@ export default {
 }
 ```
 
-**📖 See [USAGE_GUIDE.md](./USAGE_GUIDE.md) for complete documentation!**
-
 # License
 
 [MIT](https://opensource.org/license/MIT)
@@ -129,8 +126,6 @@ class MyPlugin extends Plugin {
     }
 }
 ```
-
-**📖 See [USAGE_GUIDE.md](./USAGE_GUIDE.md) for plugin development!**
 
 ## Creating Pages
 
@@ -190,8 +185,6 @@ shouldPublish: true
 Write your content in Markdown!
 ```
 
-**📖 See [USAGE_GUIDE.md](./USAGE_GUIDE.md) for layouts, plugins, hot-reload, and more!**
-
 # Architecture
 
 # API Reference
@@ -223,5 +216,3 @@ const server = new JuphjacsDevelopmentServer({ debug: true })
 await server.initialize()
 await server.startDevServer(3000)
 ```
-
-**📖 See [USAGE_GUIDE.md](./USAGE_GUIDE.md) for complete API documentation!**
