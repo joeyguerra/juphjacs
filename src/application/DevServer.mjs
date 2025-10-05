@@ -195,8 +195,67 @@ class JuphjacsDevelopmentServer {
 
         try {
             const { readFile } = await import('node:fs/promises')
-            const content = await readFile(fullPath, 'utf-8')
             
+            // Determine content type from extension first
+            const ext = filePath.split('.').pop().toLowerCase()
+            const contentTypes = {
+                // Text
+                'html': 'text/html',
+                'css': 'text/css',
+                'txt': 'text/plain',
+                'xml': 'application/xml',
+                'csv': 'text/csv',
+                
+                // JavaScript
+                'js': 'application/javascript',
+                'mjs': 'application/javascript',
+                'json': 'application/json',
+                
+                // Images
+                'png': 'image/png',
+                'jpg': 'image/jpeg',
+                'jpeg': 'image/jpeg',
+                'gif': 'image/gif',
+                'webp': 'image/webp',
+                'svg': 'image/svg+xml',
+                'ico': 'image/x-icon',
+                'bmp': 'image/bmp',
+                'tiff': 'image/tiff',
+                'tif': 'image/tiff',
+                
+                // Fonts
+                'woff': 'font/woff',
+                'woff2': 'font/woff2',
+                'ttf': 'font/ttf',
+                'otf': 'font/otf',
+                'eot': 'application/vnd.ms-fontobject',
+                
+                // Video
+                'mp4': 'video/mp4',
+                'webm': 'video/webm',
+                'ogg': 'video/ogg',
+                
+                // Audio
+                'mp3': 'audio/mpeg',
+                'wav': 'audio/wav',
+                'ogg': 'audio/ogg',
+                
+                // Documents
+                'pdf': 'application/pdf',
+                'zip': 'application/zip',
+                'tar': 'application/x-tar',
+                'gz': 'application/gzip'
+            }
+
+            // Determine if file is text or binary
+            const textExtensions = ['html', 'css', 'txt', 'xml', 'csv', 'js', 'mjs', 'json', 'svg']
+            const isText = textExtensions.includes(ext)
+            
+            // Read file with appropriate encoding
+            const content = isText 
+                ? await readFile(fullPath, 'utf-8')
+                : await readFile(fullPath)
+
             // Inject hot-reload script for HTML files (only if not already present)
             if (filePath.endsWith('.html')) {
                 // Check if HotReloader is already included
@@ -221,58 +280,8 @@ class JuphjacsDevelopmentServer {
                 res.writeHead(200)
                 res.end(modifiedContent)
             } else {
-                // Determine content type from extension
-                const ext = filePath.split('.').pop().toLowerCase()
-                const contentTypes = {
-                    // Text
-                    'html': 'text/html',
-                    'css': 'text/css',
-                    'txt': 'text/plain',
-                    'xml': 'application/xml',
-                    'csv': 'text/csv',
-                    
-                    // JavaScript
-                    'js': 'application/javascript',
-                    'mjs': 'application/javascript',
-                    'json': 'application/json',
-                    
-                    // Images
-                    'png': 'image/png',
-                    'jpg': 'image/jpeg',
-                    'jpeg': 'image/jpeg',
-                    'gif': 'image/gif',
-                    'webp': 'image/webp',
-                    'svg': 'image/svg+xml',
-                    'ico': 'image/x-icon',
-                    'bmp': 'image/bmp',
-                    'tiff': 'image/tiff',
-                    'tif': 'image/tiff',
-                    
-                    // Fonts
-                    'woff': 'font/woff',
-                    'woff2': 'font/woff2',
-                    'ttf': 'font/ttf',
-                    'otf': 'font/otf',
-                    'eot': 'application/vnd.ms-fontobject',
-                    
-                    // Video
-                    'mp4': 'video/mp4',
-                    'webm': 'video/webm',
-                    'ogg': 'video/ogg',
-                    
-                    // Audio
-                    'mp3': 'audio/mpeg',
-                    'wav': 'audio/wav',
-                    'ogg': 'audio/ogg',
-                    
-                    // Documents
-                    'pdf': 'application/pdf',
-                    'zip': 'application/zip',
-                    'tar': 'application/x-tar',
-                    'gz': 'application/gzip'
-                }
-                
-                res.setHeader('Content-Type', contentTypes[ext] || 'text/plain')
+                const contentType = contentTypes[ext] || 'application/octet-stream'
+                res.setHeader('Content-Type', contentType)
                 res.writeHead(200)
                 res.end(content)
             }
