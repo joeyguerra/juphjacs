@@ -5,7 +5,9 @@
   "main": "index.mjs",
   "type": "module",
   "exports": {
-    ".": "./index.mjs"
+    ".": "./index.mjs",
+    "./server": "./server.mjs",
+    "./plugins/*": "./plugins/*"
   },
   "files": [
     "index.mjs",
