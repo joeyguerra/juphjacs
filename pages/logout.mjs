@@ -1,10 +1,9 @@
 
-import { Page } from '../src/Page.mjs'
-import { TemplateLiteralRenderer } from '../src/TemplateLiteralRenderer.mjs'
+import { Page } from '../index.mjs'
 
 class LogoutPage extends Page {
-    constructor (rootFolder, filePath, template) {
-        super(rootFolder, filePath, template, new TemplateLiteralRenderer())
+    constructor (pagesFolder, filePath, template, delegate) {
+        super(pagesFolder, filePath, template, delegate)
         this.title = 'Logout'
         this.layout = './pages/layout.html'
         this.error = null
@@ -14,11 +13,12 @@ class LogoutPage extends Page {
     async get (req, res) {
         res.setHeader('Set-Cookie', 'session=; Max-Age=0')
         await this.render()
+        res.setHeader('Content-Type', 'text/html')
         res.end(this.content)
     }
 }
 
-export default async (rootFolder, filePath, template) => {
-    return new LogoutPage(rootFolder, filePath, template)
+export default async (pagesFolder, filePath, template, delegate) => {
+    return new LogoutPage(pagesFolder, filePath, template, delegate)
 }
 

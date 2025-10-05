@@ -13,7 +13,7 @@
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test",
-    "start:local": "node --env-file=.env --watch server.mjs"
+    "dev": "node --env-file=.env --watch server.mjs"
   },
   "keywords": [
     "web",
@@ -30,9 +30,15 @@
   "author": "Joey Guerra",
   "license": "MIT",
   "dependencies": {
+    "chokidar": "^4.0.3",
     "debug": "^4.3.7",
+    "js-yaml": "^4.1.0",
     "markdown-it": "^14.1.0",
+    "minimatch": "^10.0.3",
     "morphdom": "^2.7.4",
     "socket.io": "^4.8.0"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.1"
   }
 }

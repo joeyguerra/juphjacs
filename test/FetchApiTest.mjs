@@ -1,4 +1,4 @@
-import { FetchRequest, FetchResponse } from '../src/FetchApi.mjs'
+import { FetchRequest, FetchResponse } from '../src/infrastructure/http/FetchApi.mjs'
 import { createServer } from 'node:http'
 
 import test from 'node:test'

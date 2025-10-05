@@ -1,9 +1,9 @@
-import { Page } from '../../src/Page.mjs'
-import { TemplateLiteralRenderer } from '../../src/TemplateLiteralRenderer.mjs'
+import { Page } from '../../src/domain/pages/Page.mjs'
+import { TemplateEngine } from '../../src/infrastructure/templates/TemplateEngine.mjs'
 
 class SitemapPage extends Page {
-    constructor (rootFolder, filePath, template) {
-        super(rootFolder, filePath, template, new TemplateLiteralRenderer())
+    constructor (rootFolder, filePath, template, delegate = { broadcast: async () => {} }) {
+        super(rootFolder, filePath, template, delegate)
         this.title = 'Site Map'
         this.urls = [
             'https://example.com/',
@@ -20,6 +20,6 @@ class SitemapPage extends Page {
         res.end(this.content)
     }
 }
-export default async (rootFolder, filePath, template) => {
-    return new SitemapPage(rootFolder, filePath, template)
+export default async (rootFolder, filePath, template, delegate) => {
+    return new SitemapPage(rootFolder, filePath, template, delegate)
 }

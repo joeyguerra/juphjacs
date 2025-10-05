@@ -1,15 +1,14 @@
 
-import { Page } from '../src/Page.mjs'
-import { TemplateLiteralRenderer } from '../src/TemplateLiteralRenderer.mjs'
+import { Page } from '../index.mjs'
 
 class AdminPage extends Page {
-    constructor (rootFolder, filePath, template) {
-        super(rootFolder, filePath, template, new TemplateLiteralRenderer())
+    constructor (pagesFolder, filePath, template, delegate) {
+        super(pagesFolder, filePath, template, delegate)
         this.title = 'Admin Page'
         this.layout = './pages/layout.html'
     }
 }
 
-export default async (rootFolder, filePath, template) => {
-    return new AdminPage(rootFolder, filePath, template)
+export default async (pagesFolder, filePath, template, delegate) => {
+    return new AdminPage(pagesFolder, filePath, template, delegate)
 }

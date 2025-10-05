@@ -15,178 +15,213 @@
 Create websites with fast feedback with your code to the left (or right) and a browser to the right (or left). As you edit the code, the page updates, reflecting the changes (Hot Reload).
 
 - Use HTML or Markdown documents.
-- Write vanilla Javascript and CSS.
+- Write vanilla JavaScript and CSS.
 - Generates a static site under `_site`.
-- If there's a `.mjs` file at the same level as the `.html/.md` file and it exports a default function, it will be `imported` and any defined HTTP methods will be called during the request pipeline. In addition, the `Page` object will be the context when rendered in the template. So instance properties can be referenced in the HTML file. `TemplateLiteralRenderer` renders string literals like `${title}` in the HTML content.
+- Pages can have corresponding `.mjs` files that export a class extending `Page`
+- Template literals (`${variable}`) are rendered server-side
+- Hot-reload via WebSocket (full reload for HTML/JS, CSS-only for styles)
+- Plugin system for extensibility (BlogPlugin included)
+- Configuration-driven setup with `site.config.mjs`
 
-```javascript
-import { Page } from '../../src/Page.mjs'
-import { TemplateLiteralRenderer } from '../../src/TemplateLiteralRenderer.mjs'
-
-class APage extends Page {
-      constructor (rootFolder, filePath, template) {
-            super(rootFolder, filePath, template, new TemplateLiteralRenderer())
-            this.title = 'An example page'
-            this.layout = './pages/layout.html'
-      }
-      async get (req, res) {
-            const url = new URL(req.url, 'http://localhost')
-            this.id = url.searchParams.get('id')      
-            await this.render()
-            res.setHeader('Content-Type', 'text/html')
-            res.end(this.content)
-      }
-}
-
-export default async (rootFolder, filePath, template) => {
-      return new APage(rootFolder, filePath, template)
-}
-```
-
-- A WebSocket connection is opened and all file changes trigger a page to be re-rendered, set to the browser, where `morphdom` hot-reloads the DOM.
+**📖 See [USAGE_GUIDE.md](./USAGE_GUIDE.md) for complete documentation!**
+**📖 See [DEVSERVER_GUIDE.md](./DEVSERVER_GUIDE.md) for architecture details!**
 
 The name is a play on the KISS Principle (Keep It Simple Stupid). It's super hard to keep things simple, the name is a reminder to keep trying.
 
 # Target Audience(s)
 
-- **Learning web develoment basics** - Use this tool to quickly build a web page with a short feedback loop. You want to code HTML and quickly see what happens. You're learning Javascript and want to get into an fast interative cycle to see how things work on the browser.
-- **Building websites without frameworks** - Build a ton of websites with just HTML, Javascript and CSS.
-- **Curmudgeonly Neighbor Web Developer** - You're so mad at everyone using frameworks and you refuse to use them to build websites.
+- **Learning web development basics** - Use this tool to quickly build web pages with a short feedback loop. Code HTML and instantly see results. Perfect for learning JavaScript with fast iteration.
+- **Building websites without frameworks** - Build websites with vanilla HTML, JavaScript and CSS, no heavy frameworks required.
+- **Modern static site generation** - Generate optimized static sites with hot-reload during development.
+- **Content-focused sites** - Perfect for blogs, documentation, portfolios with Markdown support and plugin system.
 
 # Architecture
 
-- Node.js web [server](server.mjs).
-- [Socket.io](pages/layout.html) for comms when a file is updated.
-- [Morphdom](pages/js/HotReloader.mjs) code which gets the `file changed` message from the server and diffs the DOM, swapping out any changed elements.
+## Modern Clean Architecture (Domain-Driven Design)
 
-## Processing Model
+The framework follows DDD principles with clear layer separation:
 
-### Request/Response
+- **Application Layer**: DevServer, SiteGenerator, ConfigLoader, PluginManager
+- **Domain Layer**: Page, PageRepository
+- **Infrastructure Layer**: Markdown parsing, Template rendering, Hot-reload, File watching
 
-HTML Templates are generated server side and saved to a folder. The routing facility looks in this folder first to serve HTTP requests. Resources like js, css and image files are moved into this folder from the "pages" folder and served. HTML files are either served from this folder or handled by the routing facilit (Pages can define a `route` regular expression). Pages can also provide async methods that match HTTP methods; e.g. `get`, `post`, `put`, `delete`, `options`, `trace`, `head`. The signature is `async get (req, res)`.
+## Key Features
 
-### Event Driven
+- **Hot Reload**: Automatic page updates via WebSocket (full reload for HTML/JS, CSS-only for styles)
+- **Plugin System**: Extend functionality with custom plugins (BlogPlugin included)
+- **Template Engine**: Server-side template literal rendering
+- **Static Generation**: Build optimized static sites for deployment
+- **Markdown Support**: Write content in Markdown with YAML frontmatter
+- **Configuration-Driven**: Flexible `site.config.mjs` configuration
 
-Events on the `SiteGenerator` are emitted when rendering a page.
+**📖 See [DEVSERVER_GUIDE.md](./DEVSERVER_GUIDE.md) for architecture details!**
 
-### Streaming
+# Quick Start
 
-When a file is changed, `SiteGenerator` will render the Page again. The HTML will be broadcasted via WebSockets to every connected client that is on that page. `morphdom` diffs and updates the DOM where something has changed.
+Use the latest version of [Node.js](https://nodejs.org). As of writing, it's `v24.6.0`.
 
-## State Management
-
-This is left to the developer to decide when building applications with this framework.
-
-## Concurrency Model
-
-Built with NodeJS. So it's Node's concurrency model.
-
-## Data Flow
-
-Each Page has access to a `delegate` which provides a `broadcast` method to send messages to clients.
-
-## Communication Pattern
-
-Direct method calls.
-
-# Use
-
-Use the latest version of [Node.js](https://nodejs.org). As of writing, it's `v23.8.0`.
+## Installation
 
 ```sh
-npm i
-node --run start
+npm install juphjacs
 ```
 
-## With Logging
+## Start Development Server
 
 ```sh
-DEBUG=<debug|info|warn|error> node --run start
+# Start the dev server
+npm start
+
+# With debugging
+LOG_LEVEL=debug npm start
+
+# Custom port
+PORT=8080 npm start
 ```
+
+The server will build your site from `pages/` to `_site/` and start watching for changes with hot-reload at `http://localhost:3000`.
+
+## Configuration
+
+Create a `site.config.mjs` in your project root:
+
+```javascript
+export default {
+    sourceFolder: './pages',
+    buildFolder: './_site',
+    resources: ['css', 'js', 'images'],
+    plugins: []
+}
+```
+
+**📖 See [USAGE_GUIDE.md](./USAGE_GUIDE.md) for complete documentation!**
 
 # License
 
 [MIT](https://opensource.org/license/MIT)
 
-# App Design
+# App Design Goals
 
 ## Be Fast
 
-A request loads a static HTML page. Which means we have to generate static HTML files and put them in a folder where they can be piped to the response.
+Requests load static HTML pages generated at build time. The development server watches for changes and regenerates on the fly with hot-reload.
 
 ## Short Developer Feedback Loop
 
-When a file is modified, the static site generation kicks in and generates the mapped static file.
+- File change detected → Static file regenerated → Browser updated instantly
+- CSS changes reload styles only (no full page refresh)
+- HTML/JS changes trigger full page reload with WebSocket notification
 
-The generated output is then sent to the browser a user is on that page, for DOM diffing.
+## Plugin Architecture
 
-## Pages
+Extend functionality with custom plugins:
 
-A page consists of an HTML and a `.mjs` javascript file with the same name. e.g. `index.html` && `index.mjs`, in the same folder. The Javascript file will be `import`ed and passed as the `context` object to the templating engine. The templating engine uses [Template literals](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals).
+```javascript
+import { Plugin } from 'juphjacs'
 
-
-```html
-<!-- index.html -->
-<h1>${title}</h1>
+class MyPlugin extends Plugin {
+    async onContentLoaded(pages, context) {
+        // Modify content before rendering
+    }
+    
+    async onPageRendered(page, context) {
+        // Post-process rendered pages
+    }
+}
 ```
 
-```js
-// index.mjs
-import { Page } from '../../src/Page.mjs'
-import { TemplateLiteralRenderer } from '../../src/TemplateLiteralRenderer.mjs'
+**📖 See [USAGE_GUIDE.md](./USAGE_GUIDE.md) for plugin development!**
+
+## Creating Pages
+
+### Simple HTML Page
+
+```html
+<!-- pages/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>${title}</title>
+</head>
+<body>
+    <h1>${heading}</h1>
+</body>
+</html>
+```
+
+### With Page Logic
+
+```javascript
+// pages/index.mjs
+import { Page } from 'juphjacs'
 
 class IndexPage extends Page {
-    constructor (rootFolder, filePath, template) {
-        super(rootFolder, filePath, template, new TemplateLiteralRenderer())
-        this.title = 'Main page'
-        this.layout = './test/html/layout.html'
+    constructor(pagesFolder, filePath, template, delegate) {
+        super(pagesFolder, filePath, template, delegate)
+        this.title = 'My Site'
+        this.heading = 'Welcome!'
+        this.layout = './pages/layout.html'
     }
-    async get (req, res) {
+    
+    async get(req, res) {
         await this.render()
+        res.setHeader('Content-Type', 'text/html')
         res.end(this.content)
     }
 }
-export default async (rootFolder, filePath, template) => {
-    return new IndexPage(rootFolder, filePath, template)
+
+export default async (pagesFolder, filePath, template, delegate) => {
+    return new IndexPage(pagesFolder, filePath, template, delegate)
 }
 ```
 
-If methods named after the HTTP methods are defined in the Page object, they will be executed if the URI is for that html file.
+### Markdown Blog Posts
 
-## Layouts
+```markdown
+---
+title: My First Post
+date: 2024-01-15
+layout: ./pages/blog/layout.html
+shouldPublish: true
+---
 
-Define a layout for the HTML page by including a `layout` property in the module. The `layout.html` file has a to have `${body}` in it for the page to render into.
+# Hello World
+
+Write your content in Markdown!
+```
+
+**📖 See [USAGE_GUIDE.md](./USAGE_GUIDE.md) for layouts, plugins, hot-reload, and more!**
 
 # Architecture
 
-## Scenarios
+# API Reference
 
-- Static file exists for URL
-- Static file exists for URL, but is sourced from a Markdown file
+```javascript
+import {
+    // Development Server
+    startServer,                    // Quick start development server
+    JuphjacsDevelopmentServer,     // Full control over dev server
+    
+    // Core
+    SiteGenerator,                  // Static site generation
+    Page,                          // Base class for pages
+    
+    // Plugins
+    PluginManager,                 // Manage plugins
+    Plugin,                        // Base class for plugins
+    BlogPlugin,                    // Built-in blog functionality
+    
+    // Configuration
+    ConfigLoader                   // Load site.config.mjs
+} from 'juphjacs'
 
-### Instructions
+// Quick start
+await startServer()
 
-- On bootup
- - Read all markdown files
-  - transform to HTML
-  - import any same named javascript files for the context
-  - Run through templating engine
-  - Write output to _site
- - Read all the pages
-  - import any same named javascript files for the context
-  - Run through templating engine
-  - Write output to _site
-- On request
- - Lookup URI in Route table and run through templating engine if there's a match
- - if no route is found and URI exists as file, pipe file to response
-   - Send output back in response
-   - Save HTML file to _site
-- On socket (file has changed)
- - Lookup URI in Route table and run through templating engine if there's a match
-  - Send output back in connection
-  - Save HTML file to _site
- - if no route is found and file exists
-  - Render page
-  - Send output back in connection
-  - Save HTML file to _site
-- HotReload uses morphdom to diff the DOM for hot-reloading
+// Custom server
+const server = new JuphjacsDevelopmentServer({ debug: true })
+await server.initialize()
+await server.startDevServer(3000)
+```
+
+**📖 See [USAGE_GUIDE.md](./USAGE_GUIDE.md) for complete API documentation!**

@@ -1,10 +1,9 @@
 
-import { Page } from '../src/Page.mjs'
-import { TemplateLiteralRenderer } from '../src/TemplateLiteralRenderer.mjs'
+import { Page } from '../index.mjs'
 
 class LoginPage extends Page {
-    constructor (rootFolder, filePath, template) {
-        super(rootFolder, filePath, template, new TemplateLiteralRenderer())
+    constructor (pagesFolder, filePath, template, delegate) {
+        super(pagesFolder, filePath, template, delegate)
         this.title = 'Login'
         this.layout = './pages/layout.html'
         this.error = null
@@ -13,6 +12,7 @@ class LoginPage extends Page {
     
     async get (req, res) {
         await this.render()
+        res.setHeader('Content-Type', 'text/html')
         res.end(this.content)
     }
 
@@ -29,11 +29,12 @@ class LoginPage extends Page {
         }
         this.error = 'Invalid credentials'
         await this.render()
+        res.setHeader('Content-Type', 'text/html')
         await res.end(this.content)
     }
 
 }
 
-export default async (rootFolder, filePath, template) => {
-    return new LoginPage(rootFolder, filePath, template)
+export default async (pagesFolder, filePath, template, delegate) => {
+    return new LoginPage(pagesFolder, filePath, template, delegate)
 }
