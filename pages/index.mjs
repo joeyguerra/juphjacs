@@ -6,6 +6,8 @@ class IndexPage extends Page {
         this.title = 'Hot <s>Tea</s> DOM Reloading Machinations'
         this.layout = './pages/layout.html'
         this.things = ['Tea', 'Coffee', 'Chocolate']
+        this.published = true
+        this.uri = 'index.html'
     }
     
     async get (req, res) {

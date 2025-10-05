@@ -76,7 +76,12 @@ export default {
              * Whether the plugin is enabled
              */
             enabled: true,
-            
+
+            /**
+             * Path to the plugin file
+             */
+            path: '../../plugins/Blog.mjs',
+
             /**
              * Plugin-specific configuration
              */
@@ -89,11 +94,7 @@ export default {
         {
             name: 'sitemap',
             enabled: true,
-            config: {
-                hostname: 'https://example.com',
-                changefreq: 'weekly',
-                priority: 0.8
-            }
+            path: '../../plugins/Sitemap.mjs'
         }
     ]
 }

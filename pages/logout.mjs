@@ -8,6 +8,8 @@ class LogoutPage extends Page {
         this.layout = './pages/layout.html'
         this.error = null
         this.generatedCsrf = '123456'
+        this.published = true
+        this.uri = 'logout.html'
     }
     
     async get (req, res) {

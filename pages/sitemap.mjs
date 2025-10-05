@@ -5,6 +5,8 @@ class SitemapPage extends Page {
         super(pagesFolder, filePath, template, delegate)
         this.title = 'Site Map'
         this.links = []
+        this.uri = 'sitemap.xml'
+        this.published = true
     }
 
     async get (req, res) {
