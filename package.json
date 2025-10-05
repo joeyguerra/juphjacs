@@ -10,7 +10,8 @@
   "files": [
     "index.mjs",
     "server.mjs",
-    "src/"
+    "src/",
+    "plugins/"
   ],
   "scripts": {
     "start": "node server.mjs",
