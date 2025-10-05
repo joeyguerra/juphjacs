@@ -184,6 +184,11 @@ class JuphjacsDevelopmentServer {
         
         this.logger.debug(`${req.method} ${url.pathname}`)
 
+        // Intercept framework resources (served from juphjacs itself)
+        if (url.pathname.startsWith('/__juphjacs__/')) {
+            return await this.serveFrameworkResource(url.pathname, res)
+        }
+
         // Serve files from build directory
         const filePath = url.pathname === '/' ? '/index.html' : url.pathname
         const fullPath = join(await this.configLoader.load().then(c => c.buildFolder), filePath)
@@ -200,24 +205,13 @@ class JuphjacsDevelopmentServer {
                 let modifiedContent = content
                 
                 if (!hasHotReloader) {
-                    // Inject inline hot-reload script
+                    // Inject hot-reload script with DOM morphing
                     const hotReloadScript = `
 <script src="/socket.io/socket.io.js"></script>
-<script>
-  const socket = io('/hot-reload');
-  socket.on('reload', () => window.location.reload());
-  socket.on('css-reload', () => {
-    const links = document.querySelectorAll('link[rel="stylesheet"]');
-    links.forEach(link => {
-      const url = new URL(link.href);
-      url.searchParams.set('t', Date.now());
-      link.href = url.toString();
-    });
-  });
-  socket.on('file-changed', (data) => {
-    console.log('File changed:', data);
-    window.location.reload();
-  });
+<script type="module">
+  import { HotReloader } from '/__juphjacs__/HotReloader.mjs'
+  const socket = io('/hot-reload')
+  const reloader = new HotReloader(window, socket)
 </script>
 </body>`
                     modifiedContent = content.replace('</body>', hotReloadScript)
@@ -253,6 +247,39 @@ class JuphjacsDevelopmentServer {
                 res.writeHead(500, { 'Content-Type': 'text/html' })
                 res.end('<h1>500 Internal Server Error</h1>')
             }
+        }
+    }
+
+    async serveFrameworkResource(pathname, res) {
+        // Remove /__juphjacs__/ prefix
+        const resourcePath = pathname.replace('/__juphjacs__/', '')
+        
+        try {
+            const { readFile } = await import('node:fs/promises')
+            const { fileURLToPath } = await import('node:url')
+            const { dirname, join } = await import('node:path')
+            
+            // Get framework's root directory
+            const frameworkRoot = dirname(fileURLToPath(import.meta.url))
+            const resourceFile = join(frameworkRoot, '..', 'infrastructure', 'hotreload', resourcePath)
+            
+            const content = await readFile(resourceFile, 'utf-8')
+            
+            // Determine content type
+            const ext = resourcePath.split('.').pop()
+            const contentTypes = {
+                'mjs': 'application/javascript',
+                'js': 'application/javascript',
+                'css': 'text/css'
+            }
+            
+            res.setHeader('Content-Type', contentTypes[ext] || 'text/plain')
+            res.writeHead(200)
+            res.end(content)
+        } catch (error) {
+            this.logger.error(`Error serving framework resource ${pathname}: ${error.message}`)
+            res.writeHead(404, { 'Content-Type': 'text/plain' })
+            res.end('Framework resource not found')
         }
     }
 
