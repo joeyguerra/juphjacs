@@ -190,11 +190,23 @@ class JuphjacsDevelopmentServer {
         }
 
         // Serve files from build directory
-        const filePath = url.pathname === '/' ? '/index.html' : url.pathname
-        const fullPath = join(await this.configLoader.load().then(c => c.buildFolder), filePath)
+        let filePath = url.pathname === '/' ? '/index.html' : url.pathname
+        let fullPath = join(await this.configLoader.load().then(c => c.buildFolder), filePath)
 
         try {
-            const { readFile } = await import('node:fs/promises')
+            const { readFile, stat } = await import('node:fs/promises')
+            
+            // Check if path is a directory
+            try {
+                const stats = await stat(fullPath)
+                if (stats.isDirectory()) {
+                    // Append index.html for directory paths
+                    filePath = filePath.endsWith('/') ? filePath + 'index.html' : filePath + '/index.html'
+                    fullPath = join(await this.configLoader.load().then(c => c.buildFolder), filePath)
+                }
+            } catch (statError) {
+                // If stat fails, continue with original path
+            }
             
             // Determine content type from extension first
             const ext = filePath.split('.').pop().toLowerCase()

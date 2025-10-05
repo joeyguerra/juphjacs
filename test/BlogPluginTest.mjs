@@ -173,7 +173,7 @@ describe('BlogPlugin', () => {
                 },
                 {
                     filePath: '/pages/blog/index.html',
-                    route: new UriToStaticFileRoute('/blog/index.html', '/pages/blog/index.html'),
+                    route: new UriToStaticFileRoute('/blog/', '/pages/blog/index.html'),
                     metadata: { title: 'Blog' },
                     content: '<h1>Blog</h1>'
                 }
