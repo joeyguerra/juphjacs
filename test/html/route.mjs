@@ -1,9 +1,9 @@
-import { Page } from '../../src/Page.mjs'
-import { TemplateLiteralRenderer } from '../../src/TemplateLiteralRenderer.mjs'
+import { Page } from '../../src/domain/pages/Page.mjs'
+import { TemplateEngine } from '../../src/infrastructure/templates/TemplateEngine.mjs'
 
 class RoutePage extends Page {
-    constructor (rootFolder, filePath, template) {
-        super(rootFolder, filePath, template, new TemplateLiteralRenderer())
+    constructor (rootFolder, filePath, template, delegate = { broadcast: async () => {} }) {
+        super(rootFolder, filePath, template, delegate)
         this.title = 'Routing page'
         this.layout = './test/html/layout.html'
         this.param = null
@@ -43,6 +43,6 @@ class RoutePage extends Page {
     }
 }
 
-export default async (rootFolder, filePath, template) => {
-    return new RoutePage(rootFolder, filePath, template)
+export default async (rootFolder, filePath, template, delegate) => {
+    return new RoutePage(rootFolder, filePath, template, delegate)
 }
