@@ -26,7 +26,9 @@ class SitemapPlugin extends Plugin {
         this.links.clear()
         for (const page of pages) {
             const link = this.createLinkFromPage(page)
-            if (link && page.published) {
+            // published is a date
+            // Only include pages with a published date prior than today
+            if (link && (!page.published || new Date(page.published) <= new Date())) {
                 this.links.add(link)
             }
         }
@@ -57,9 +59,7 @@ class SitemapPlugin extends Plugin {
 
     getSortedLinks() {
         return Array.from(this.links).sort((a, b) => {
-            const dateA = a.published instanceof Date ? a.published : new Date(a.published)
-            const dateB = b.published instanceof Date ? b.published : new Date(b.published)
-            return dateB - dateA // Descending order (newest first)
+            return new Date(b.published) - new Date(a.published)
         })
     }
 }

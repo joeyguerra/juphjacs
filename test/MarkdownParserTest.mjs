@@ -19,7 +19,7 @@ describe('MarkdownParser', () => {
         const markdown = `---
 title: 'My Post'
 dateString: '2024-01-01'
-published: true
+published: '2025-09-01'
 tags:
   - test
   - markdown
@@ -33,7 +33,7 @@ This is the content.`
         
         assert.strictEqual(result.frontmatter.title, 'My Post')
         assert.strictEqual(result.frontmatter.dateString, '2024-01-01')
-        assert.strictEqual(result.frontmatter.published, true)
+        assert.strictEqual(result.frontmatter.published, '2025-09-01')
         assert.deepStrictEqual(result.frontmatter.tags, ['test', 'markdown'])
         assert.ok(result.html.includes('<h1>Content</h1>'))
     })

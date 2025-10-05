@@ -43,16 +43,16 @@ describe('PageRepository', () => {
     it('should filter pages by criteria', async () => {
         const page1 = new Page(testDir, join(testDir, 'published.html'), '<h1>Published</h1>')
         page1.uri = '/published.html'
-        page1.published = true
+        page1.published = '2025-09-01'
         
         const page2 = new Page(testDir, join(testDir, 'draft.html'), '<h1>Draft</h1>')
         page2.uri = '/draft.html'
-        page2.published = false
+        page2.published = null
         
         repository.save(page1)
         repository.save(page2)
         
-        const published = repository.where({ published: true })
+        const published = repository.where({ published: '2025-09-01' })
         assert.strictEqual(published.length, 1)
         assert.strictEqual(published[0].uri, '/published.html')
     })

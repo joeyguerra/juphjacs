@@ -49,11 +49,13 @@ class BlogPlugin extends Plugin {
         for (const page of pages) {
             if (this.isBlogPost(page)) {
                 const post = this.createPostFromPage(page)
-                if (post && post.shouldPublish !== false) {
+                // Only add post if it was created successfully and should be published
+                if (post && post.published && (post.published instanceof Date ? post.published : new Date(post.published)) < new Date()) {
                     this.posts.add(post)
                 }
             }
         }
+        this.posts = new Set(this.getSortedPosts())
 
         return pages
     }
@@ -80,10 +82,17 @@ class BlogPlugin extends Plugin {
     }
 
     createPostFromPage(page) {
-        const metadata = page.metadata || {}
-        
         // Skip posts that shouldn't be published
-        if (metadata.shouldPublish === false) {
+        // published is a date
+        if (!page.published) {
+            return null
+        }
+        // Check if published is a valid date
+        if (isNaN(new Date(page.published).getTime())) {
+            return null
+        }
+        // Published date is in the future
+        if (new Date(page.published) > new Date()) {
             return null
         }
 
@@ -102,23 +111,20 @@ class BlogPlugin extends Plugin {
         const uri = `${blogPath}/${year}/${slug}.html`
 
         return new BlogPost({
-            title: metadata.title || slug,
-            published: metadata.published || new Date(year),
-            excerpt: metadata.excerpt || '',
+            title: page.title || slug,
+            published: page.published,
+            excerpt: page.excerpt || '',
             slug,
             link: uri,
-            tags: metadata.tags || [],
-            image: metadata.image,
-            year,
-            shouldPublish: metadata.shouldPublish
+            tags: page.tags || [],
+            image: page.image,
+            year
         })
     }
 
     getSortedPosts() {
         return Array.from(this.posts).sort((a, b) => {
-            const dateA = a.published instanceof Date ? a.published : new Date(a.published)
-            const dateB = b.published instanceof Date ? b.published : new Date(b.published)
-            return dateB - dateA // Descending order (newest first)
+            return new Date(b.published) - new Date(a.published)
         })
     }
 

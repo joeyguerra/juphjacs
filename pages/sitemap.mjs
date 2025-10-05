@@ -6,7 +6,7 @@ class SitemapPage extends Page {
         this.title = 'Site Map'
         this.links = []
         this.uri = 'sitemap.xml'
-        this.published = true
+        this.published = '2025-09-01'
     }
 
     async get (req, res) {

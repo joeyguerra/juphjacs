@@ -100,7 +100,6 @@ title: My Post Title
 published: 2024-01-15
 excerpt: A short description
 tags: [javascript, node]
-shouldPublish: true
 ---
 
 # Post content here

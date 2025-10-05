@@ -6,7 +6,7 @@ class IndexPage extends Page {
         this.title = 'Hot <s>Tea</s> DOM Reloading Machinations'
         this.layout = './pages/layout.html'
         this.things = ['Tea', 'Coffee', 'Chocolate']
-        this.published = true
+        this.published = '2025-09-01'
         this.uri = 'index.html'
     }
     

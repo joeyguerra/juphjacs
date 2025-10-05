@@ -159,7 +159,7 @@ This is content.
 ---
 layout: './layouts/post.html'
 title: 'My Post'
-published: true
+published: '2025-09-01'
 excerpt: 'A summary of my post'
 tags: ['javascript', 'web']
 ---
@@ -228,7 +228,7 @@ Update your `package.json` scripts if needed:
 title: 'Post Title'
 author: 'John Doe'
 date: '2024-01-01'
-published: true
+published: '2025-09-01'
 tags: ['tag1', 'tag2']
 custom: 'Any custom field'
 ---
@@ -294,7 +294,7 @@ const repository = new PageRepository('/path/to/pages')
 repository.save(page)
 
 // Query pages
-const publishedPages = repository.where({ published: true })
+const publishedPages = repository.where({ published: '2025-09-01' })
 
 // Find by route
 const page = repository.findByRoute('/about')

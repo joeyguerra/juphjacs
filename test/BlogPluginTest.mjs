@@ -37,31 +37,26 @@ describe('BlogPlugin', () => {
                 {
                     filePath: '/pages/blog/2024/first-post.md',
                     route: new UriToStaticFileRoute('/blog/2024/first-post.html', '/pages/blog/2024/first-post.md'),
-                    metadata: {
-                        title: 'First Post',
-                        published: new Date('2024-01-15'),
-                        excerpt: 'This is the first post',
-                        shouldPublish: true,
-                        tags: ['javascript', 'node']
-                    },
+                    title: 'First Post',
+                    published: new Date('2024-01-15'),
+                    excerpt: 'This is the first post',
+                    tags: ['javascript', 'node'],
                     content: '# First Post'
                 },
                 {
                     filePath: '/pages/blog/2024/second-post.md',
                     route: new UriToStaticFileRoute('/blog/2024/second-post.html', '/pages/blog/2024/second-post.md'),
-                    metadata: {
-                        title: 'Second Post',
-                        published: new Date('2024-02-20'),
-                        excerpt: 'This is the second post',
-                        shouldPublish: false,
-                        tags: ['testing']
-                    },
+                    title: 'Second Post',
+                    published: null,
+                    excerpt: 'This is the second post',
+                    tags: ['testing'],
                     content: '# Second Post'
                 },
                 {
                     filePath: '/pages/about.html',
                     route: new UriToStaticFileRoute('/about.html', '/pages/about.html'),
-                    metadata: { title: 'About' },
+                    title: 'About',
+                    published: new Date('2024-03-01'),
                     content: '<h1>About</h1>'
                 }
             ]
@@ -81,10 +76,8 @@ describe('BlogPlugin', () => {
                 {
                     filePath: '/pages/blog/2025/my-awesome-post.md',
                     route: new UriToStaticFileRoute('/blog/2025/my-awesome-post.html', '/pages/blog/2025/my-awesome-post.md'),
-                    metadata: {
-                        title: 'My Awesome Post',
-                        shouldPublish: true
-                    },
+                    title: 'My Awesome Post',
+                    published: new Date('2025-03-10'),
                     content: 'content'
                 }
             ]
@@ -97,20 +90,22 @@ describe('BlogPlugin', () => {
             assert.strictEqual(post.link, '/blog/2025/my-awesome-post.html')
         })
 
-        it('should only collect posts with shouldPublish=true', async () => {
+        it('should only collect posts with published date in the past', async () => {
             const plugin = new BlogPlugin()
             
             const pages = [
                 {
                     filePath: '/pages/blog/2024/draft.md',
                     route: new UriToStaticFileRoute('/blog/2024/draft.html', '/pages/blog/2024/draft.md'),
-                    metadata: { title: 'Draft', shouldPublish: false },
+                    title: 'Draft',
+                    published: null,
                     content: 'draft'
                 },
                 {
                     filePath: '/pages/blog/2024/published.md',
                     route: new UriToStaticFileRoute('/blog/2024/published.html', '/pages/blog/2024/published.md'),
-                    metadata: { title: 'Published', shouldPublish: true },
+                    title: 'Published',
+                    published: new Date('2024-01-01'),
                     content: 'published'
                 }
             ]
@@ -129,27 +124,20 @@ describe('BlogPlugin', () => {
                 {
                     filePath: '/pages/blog/2023/old-post.md',
                     route: new UriToStaticFileRoute('/blog/2023/old-post.html', '/pages/blog/2023/old-post.md'),
-                    metadata: {
-                        title: 'Old Post',
-                        published: new Date('2023-01-01'),
-                        shouldPublish: true
-                    },
+                    title: 'Old Post',
+                    published: new Date('2023-01-01'),
                     content: 'old'
                 },
                 {
                     filePath: '/pages/blog/2025/new-post.md',
                     route: new UriToStaticFileRoute('/blog/2025/new-post.html', '/pages/blog/2025/new-post.md'),
-                    metadata: {
-                        title: 'New Post',
-                        published: new Date('2025-12-31'),
-                        shouldPublish: true
-                    },
+                    title: 'New Post',
+                    published: new Date('2025-09-30'),
                     content: 'new'
                 }
             ]
 
-            await plugin.onContentLoaded(pages)
-            
+            await plugin.onContentLoaded(pages)            
             const sortedPosts = plugin.getSortedPosts()
             assert.strictEqual(sortedPosts[0].title, 'New Post')
             assert.strictEqual(sortedPosts[1].title, 'Old Post')
@@ -165,16 +153,14 @@ describe('BlogPlugin', () => {
                 {
                     filePath: '/pages/blog/2024/post.md',
                     route: new UriToStaticFileRoute('/blog/2024/post.html', '/pages/blog/2024/post.md'),
-                    metadata: {
-                        title: 'Test Post',
-                        shouldPublish: true
-                    },
+                    title: 'Test Post',
+                    published: new Date('2025-03-10'),
                     content: 'test'
                 },
                 {
                     filePath: '/pages/blog/index.html',
                     route: new UriToStaticFileRoute('/blog/', '/pages/blog/index.html'),
-                    metadata: { title: 'Blog' },
+                    title: 'Blog',
                     content: '<h1>Blog</h1>'
                 }
             ]
@@ -194,7 +180,7 @@ describe('BlogPlugin', () => {
             const aboutPage = {
                 filePath: '/pages/about.html',
                 route: new UriToStaticFileRoute('/about.html', '/pages/about.html'),
-                metadata: { title: 'About' },
+                title: 'About',
                 content: '<h1>About</h1>'
             }
 
@@ -210,10 +196,8 @@ describe('BlogPlugin', () => {
                 {
                     filePath: '/pages/articles/2024/post.md',
                     route: new UriToStaticFileRoute('/articles/2024/post.html', '/pages/articles/2024/post.md'),
-                    metadata: {
-                        title: 'Article',
-                        shouldPublish: true
-                    },
+                    title: 'Article',
+                    published: new Date('2024-01-01'),
                     content: 'content'
                 }
             ]
@@ -222,7 +206,7 @@ describe('BlogPlugin', () => {
             const indexPage = {
                 filePath: '/pages/articles/index.html',
                 route: new UriToStaticFileRoute('/articles/index.html', '/pages/articles/index.html'),
-                metadata: { title: 'Articles' },
+                title: 'Articles',
                 content: '<h1>Articles</h1>'
             }
 
@@ -241,21 +225,17 @@ describe('BlogPlugin', () => {
                 {
                     filePath: '/pages/blog/2024/post1.md',
                     route: new UriToStaticFileRoute('/blog/2024/post1.html', '/pages/blog/2024/post1.md'),
-                    metadata: {
-                        title: 'Post 1',
-                        tags: ['javascript', 'node'],
-                        shouldPublish: true
-                    },
+                    title: 'Post 1',
+                    tags: ['javascript', 'node'],
+                    published: new Date('2025-03-10'),
                     content: 'content'
                 },
                 {
                     filePath: '/pages/blog/2024/post2.md',
                     route: new UriToStaticFileRoute('/blog/2024/post2.html', '/pages/blog/2024/post2.md'),
-                    metadata: {
-                        title: 'Post 2',
-                        tags: ['python'],
-                        shouldPublish: true
-                    },
+                    title: 'Post 2',
+                    tags: ['python'],
+                    published: new Date('2025-03-10'),
                     content: 'content'
                 }
             ]
@@ -273,13 +253,15 @@ describe('BlogPlugin', () => {
                 {
                     filePath: '/pages/blog/2024/old.md',
                     route: new UriToStaticFileRoute('/blog/2024/old.html', '/pages/blog/2024/old.md'),
-                    metadata: { title: 'Old', shouldPublish: true },
+                    title: 'Old',
+                    published: new Date('2024-01-01'),
                     content: 'old'
                 },
                 {
                     filePath: '/pages/blog/2025/new.md',
                     route: new UriToStaticFileRoute('/blog/2025/new.html', '/pages/blog/2025/new.md'),
-                    metadata: { title: 'New', shouldPublish: true },
+                    title: 'New',
+                    published: new Date('2025-01-01'),
                     content: 'new'
                 }
             ]

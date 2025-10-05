@@ -108,7 +108,7 @@ Parses markdown files with YAML frontmatter support:
 ```markdown
 ---
 title: 'My Post'
-published: true
+published: '2025-09-01'
 tags: ['one', 'two']
 ---
 
@@ -198,7 +198,7 @@ Markdown files with frontmatter:
 ---
 layout: './layouts/post.html'
 title: 'My Post'
-published: true
+published: '2025-09-01'
 ---
 
 # Hello World

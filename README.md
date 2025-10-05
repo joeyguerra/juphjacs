@@ -175,9 +175,8 @@ export default async (pagesFolder, filePath, template, delegate) => {
 ```markdown
 ---
 title: My First Post
-date: 2024-01-15
+published: 2024-01-15
 layout: ./pages/blog/layout.html
-shouldPublish: true
 ---
 
 # Hello World

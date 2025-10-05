@@ -8,7 +8,7 @@ class LoginPage extends Page {
         this.layout = './pages/layout.html'
         this.error = null
         this.generatedCsrf = '123456'
-        this.published = true
+        this.published = '2025-09-01'
         this.uri = 'login.html'
     }
     

@@ -145,10 +145,9 @@ export default {
 <!-- pages/blog/2024/my-first-post.md -->
 ---
 title: My First Blog Post
-date: 2024-01-15
+published: 2024-01-15
 author: Your Name
 tags: [javascript, tutorial]
-shouldPublish: true
 ---
 
 # Welcome to My Blog

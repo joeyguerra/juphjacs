@@ -44,8 +44,8 @@ describe('Plugin', () => {
             assert.strictEqual(plugin.initCalled, true)
 
             const pages = [
-                { title: 'Published', published: true },
-                { title: 'Draft', published: false }
+                { title: 'Published', published: '2025-09-01' },
+                { title: 'Draft', published: null }
             ]
             const filtered = await plugin.onContentLoaded(pages)
             assert.strictEqual(plugin.contentLoadedCalled, true)
@@ -111,7 +111,9 @@ describe('Plugin', () => {
             
             class SortPlugin extends Plugin {
                 async onContentLoaded(pages) {
-                    return pages.sort((a, b) => b.date - a.date)
+                    return pages.sort((a, b) =>{
+                        return new Date(b.published) - new Date(a.published)
+                    })
                 }
             }
 
@@ -119,9 +121,9 @@ describe('Plugin', () => {
             manager.register(new SortPlugin('sort'))
             
             const pages = [
-                { title: 'Old Published', published: true, date: new Date('2020-01-01') },
-                { title: 'New Published', published: true, date: new Date('2024-01-01') },
-                { title: 'Draft', published: false, date: new Date('2025-01-01') }
+                { title: 'Old Published', published: '2020-01-01'},
+                { title: 'New Published', published: '2024-01-01' },
+                { title: 'Draft', published: null }
             ]
             
             const result = await manager.executeHook('onContentLoaded', pages)

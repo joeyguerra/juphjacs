@@ -152,7 +152,7 @@ describe('SiteGenerator (Refactored)', () => {
         it('should process markdown files with frontmatter', async () => {
             const markdown = `---
 title: 'Test Post'
-published: true
+published: '2025-09-01'
 ---
 
 # Hello World
