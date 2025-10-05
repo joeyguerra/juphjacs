@@ -85,7 +85,7 @@ export default {
             /**
              * Plugin-specific configuration
              */
-            config: {
+            options: {
                 postsFolder: 'blog',
                 postsPerPage: 10,
                 dateFormat: 'MMMM DD, YYYY'
@@ -94,7 +94,10 @@ export default {
         {
             name: 'sitemap',
             enabled: true,
-            path: '../../plugins/Sitemap.mjs'
+            path: '../../plugins/Sitemap.mjs',
+            options: {
+                hostname: 'http://localhost:3000'
+            }
         }
     ]
 }
