@@ -10,8 +10,7 @@ export { ConfigLoader } from './src/application/config/ConfigLoader.mjs'
 export { PluginManager } from './src/application/plugins/PluginManager.mjs'
 export { Plugin } from './src/application/plugins/Plugin.mjs'
 export { BlogPlugin } from './src/application/plugins/BlogPlugin.mjs'
-export { Sitemap } from './plugins/Sitemap.mjs'
-export { Blog } from './plugins/Blog.mjs'
+export { SitemapPlugin } from './src/application/plugins/SitemapPlugin.mjs'
 
 // Domain Layer
 export { PageRepository } from './src/domain/pages/PageRepository.mjs'

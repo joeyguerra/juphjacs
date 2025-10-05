@@ -4,11 +4,13 @@
   "description": "A simple web site builder. Just use plain html, javascript and css; stupid.",
   "main": "index.mjs",
   "type": "module",
+  "exports": {
+    ".": "./index.mjs"
+  },
   "files": [
-    "src",
-    "pages/index.html",
-    "pages/index.mjs",
-    "pages/layout.html"
+    "index.mjs",
+    "server.mjs",
+    "src/"
   ],
   "scripts": {
     "start": "node server.mjs",
