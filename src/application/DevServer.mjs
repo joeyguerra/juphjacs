@@ -221,17 +221,55 @@ class JuphjacsDevelopmentServer {
                 res.writeHead(200)
                 res.end(modifiedContent)
             } else {
-                // Determine content type
-                const ext = filePath.split('.').pop()
+                // Determine content type from extension
+                const ext = filePath.split('.').pop().toLowerCase()
                 const contentTypes = {
+                    // Text
+                    'html': 'text/html',
                     'css': 'text/css',
+                    'txt': 'text/plain',
+                    'xml': 'application/xml',
+                    'csv': 'text/csv',
+                    
+                    // JavaScript
                     'js': 'application/javascript',
                     'mjs': 'application/javascript',
                     'json': 'application/json',
+                    
+                    // Images
                     'png': 'image/png',
                     'jpg': 'image/jpeg',
+                    'jpeg': 'image/jpeg',
+                    'gif': 'image/gif',
+                    'webp': 'image/webp',
                     'svg': 'image/svg+xml',
-                    'ico': 'image/x-icon'
+                    'ico': 'image/x-icon',
+                    'bmp': 'image/bmp',
+                    'tiff': 'image/tiff',
+                    'tif': 'image/tiff',
+                    
+                    // Fonts
+                    'woff': 'font/woff',
+                    'woff2': 'font/woff2',
+                    'ttf': 'font/ttf',
+                    'otf': 'font/otf',
+                    'eot': 'application/vnd.ms-fontobject',
+                    
+                    // Video
+                    'mp4': 'video/mp4',
+                    'webm': 'video/webm',
+                    'ogg': 'video/ogg',
+                    
+                    // Audio
+                    'mp3': 'audio/mpeg',
+                    'wav': 'audio/wav',
+                    'ogg': 'audio/ogg',
+                    
+                    // Documents
+                    'pdf': 'application/pdf',
+                    'zip': 'application/zip',
+                    'tar': 'application/x-tar',
+                    'gz': 'application/gzip'
                 }
                 
                 res.setHeader('Content-Type', contentTypes[ext] || 'text/plain')
