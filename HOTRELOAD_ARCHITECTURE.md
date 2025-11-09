@@ -31,7 +31,7 @@ User Request: /__juphjacs__/HotReloader.mjs
 src/infrastructure/hotreload/
 ├── HotReloader.mjs       ← Client-side DOM morphing
 ├── FileWatcher.mjs       ← Server-side file monitoring
-└── ReloadServer.mjs      ← WebSocket server
+└── HotReloadSocketServer.mjs      ← WebSocket server
 ```
 
 ### User Project (clean, no framework files)
@@ -67,7 +67,7 @@ GET /__juphjacs__/HotReloader.mjs
 File changed: pages/index.html
 → FileWatcher emits 'change' event
 → DevServer rebuilds file
-→ ReloadServer broadcasts via Socket.IO
+→ HotReloadSocketServer broadcasts via Socket.IO
 → HotReloader.mjs receives event
 → Fetches updated HTML
 → Morphs DOM (preserves state)
@@ -199,8 +199,8 @@ All 126 tests pass, including:
 
 ## Related Files
 
-- `src/application/DevServer.mjs` - Request handling and injection
+- `src/application/WebServer.mjs` - Request handling and injection
 - `src/infrastructure/hotreload/HotReloader.mjs` - Client-side DOM morphing
 - `src/infrastructure/hotreload/FileWatcher.mjs` - File system monitoring
-- `src/infrastructure/hotreload/ReloadServer.mjs` - WebSocket server
+- `src/infrastructure/hotreload/HotReloadSocketServer.mjs` - WebSocket server
 - `FRAMEWORK_RESOURCES.md` - Documentation

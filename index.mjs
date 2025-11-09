@@ -1,8 +1,8 @@
 // Juphjacs - Modern Static Site Generator with Hot-Reload
 // Main entry point - Clean architecture exports
 
-// Development Server
-export { JuphjacsDevelopmentServer, startServer } from './src/application/DevServer.mjs'
+// Web Server
+export { JuphjacWebServer, startServer } from './src/application/WebServer.mjs'
 
 // Application Layer
 export { SiteGenerator } from './src/application/SiteGenerator.mjs'
@@ -20,7 +20,7 @@ export { Page, EVENTS } from './src/domain/pages/Page.mjs'
 export { MarkdownParser } from './src/infrastructure/markdown/MarkdownParser.mjs'
 export { TemplateEngine } from './src/infrastructure/templates/TemplateEngine.mjs'
 export { FileWatcher } from './src/infrastructure/hotreload/FileWatcher.mjs'
-export { ReloadServer } from './src/infrastructure/hotreload/ReloadServer.mjs'
+export { HotReloadSocketServer } from './src/infrastructure/hotreload/HotReloadSocketServer.mjs'
 export { FileFilter } from './src/infrastructure/FileFilter.mjs'
 export { UriToStaticFileRoute } from './src/infrastructure/routing/UriToStaticFileRoute.mjs'
 export { RequestBodyParser } from './src/infrastructure/http/RequestBodyParser.mjs'

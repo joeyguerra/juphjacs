@@ -66,7 +66,7 @@ To add a new framework resource:
 
 ## Technical Details
 
-**Implementation:** `src/application/DevServer.mjs`
+**Implementation:** `src/application/WebServer.mjs`
 
 **Key Methods:**
 - `handleRequest()` - Intercepts `/__juphjacs__/` requests

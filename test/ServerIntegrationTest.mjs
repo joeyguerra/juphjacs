@@ -1,16 +1,16 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { JuphjacsDevelopmentServer } from '../src/application/DevServer.mjs'
+import { JuphjacWebServer } from '../src/application/WebServer.mjs'
 
-await test('DevServer Integration - Dynamic Page Handling', async t => {
+await test('Server Integration - Dynamic Page Handling', async t => {
     await t.test('should execute page.post() method for POST request', async () => {
-        const server = new JuphjacsDevelopmentServer({
+        const server = new JuphjacWebServer({
             rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
             logLevel: 'error'
         })
         
         await server.initialize()
-        await server.startDevServer(0) // use random port
+        await server.start(0) // use random port
         
         const port = server.httpServer.address().port
         
@@ -39,13 +39,13 @@ await test('DevServer Integration - Dynamic Page Handling', async t => {
     })
     
     await t.test('should execute page.get() method for GET request', async () => {
-        const server = new JuphjacsDevelopmentServer({
+        const server = new JuphjacWebServer({
             rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
             logLevel: 'error'
         })
         
         await server.initialize()
-        await server.startDevServer(0)
+        await server.start(0)
         
         const port = server.httpServer.address().port
         
@@ -62,13 +62,13 @@ await test('DevServer Integration - Dynamic Page Handling', async t => {
     })
     
     await t.test('should serve framework resources', async () => {
-        const server = new JuphjacsDevelopmentServer({
+        const server = new JuphjacWebServer({
             rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
             logLevel: 'error'
         })
         
         await server.initialize()
-        await server.startDevServer(0)
+        await server.start(0)
         
         const port = server.httpServer.address().port
         
@@ -85,13 +85,13 @@ await test('DevServer Integration - Dynamic Page Handling', async t => {
     })
     
     await t.test('should serve static HTML pages without dynamic methods', async () => {
-        const server = new JuphjacsDevelopmentServer({
+        const server = new JuphjacWebServer({
             rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
             logLevel: 'error'
         })
         
         await server.initialize()
-        await server.startDevServer(0)
+        await server.start(0)
         
         const port = server.httpServer.address().port
         
@@ -111,13 +111,13 @@ await test('DevServer Integration - Dynamic Page Handling', async t => {
     })
     
     await t.test('should serve static CSS files', async () => {
-        const server = new JuphjacsDevelopmentServer({
+        const server = new JuphjacWebServer({
             rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
             logLevel: 'error'
         })
         
         await server.initialize()
-        await server.startDevServer(0)
+        await server.start(0)
         
         const port = server.httpServer.address().port
         
@@ -133,13 +133,13 @@ await test('DevServer Integration - Dynamic Page Handling', async t => {
     })
     
     await t.test('should serve static JavaScript files', async () => {
-        const server = new JuphjacsDevelopmentServer({
+        const server = new JuphjacWebServer({
             rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
             logLevel: 'error'
         })
         
         await server.initialize()
-        await server.startDevServer(0)
+        await server.start(0)
         
         const port = server.httpServer.address().port
         
@@ -155,13 +155,13 @@ await test('DevServer Integration - Dynamic Page Handling', async t => {
     })
     
     await t.test('should return 404 for non-existent files', async () => {
-        const server = new JuphjacsDevelopmentServer({
+        const server = new JuphjacWebServer({
             rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
             logLevel: 'error'
         })
         
         await server.initialize()
-        await server.startDevServer(0)
+        await server.start(0)
         
         const port = server.httpServer.address().port
         
@@ -178,13 +178,13 @@ await test('DevServer Integration - Dynamic Page Handling', async t => {
     })
     
     await t.test('should serve directory index.html when browsing to /blog', async () => {
-        const server = new JuphjacsDevelopmentServer({
+        const server = new JuphjacWebServer({
             rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
             logLevel: 'error'
         })
         
         await server.initialize()
-        await server.startDevServer(0)
+        await server.start(0)
         
         const port = server.httpServer.address().port
         
@@ -200,13 +200,13 @@ await test('DevServer Integration - Dynamic Page Handling', async t => {
     })
     
     await t.test('should serve directory index.html when browsing to /blog/', async () => {
-        const server = new JuphjacsDevelopmentServer({
+        const server = new JuphjacWebServer({
             rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
             logLevel: 'error'
         })
         
         await server.initialize()
-        await server.startDevServer(0)
+        await server.start(0)
         
         const port = server.httpServer.address().port
         
@@ -233,7 +233,7 @@ await test('DevServer Integration - Dynamic Page Handling', async t => {
             info: (msg) => console.log(`[MOCK] ${msg}`)
         }
         
-        const server = new JuphjacsDevelopmentServer({
+        const server = new JuphjacWebServer({
             rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
             logLevel: 'error',
             context: {
@@ -244,7 +244,7 @@ await test('DevServer Integration - Dynamic Page Handling', async t => {
         })
         
         await server.initialize()
-        await server.startDevServer(0)
+        await server.start(0)
         
         const port = server.httpServer.address().port
         
@@ -258,6 +258,36 @@ await test('DevServer Integration - Dynamic Page Handling', async t => {
             // Verify context is passed to DynamicPageHandler
             // The handler chain contains DynamicPageHandler which should have context
             assert.ok(server.handlerChain, 'Server should have handler chain')
+        } finally {
+            await server.stop()
+        }
+    })
+    
+    await t.test('should make WebSocket server available in context', async () => {
+        const server = new JuphjacWebServer({
+            rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
+            logLevel: 'error',
+            context: {
+                customValue: 'test-123'
+            }
+        })
+        
+        await server.initialize()
+        await server.start(0)
+        
+        const port = server.httpServer.address().port
+        
+        try {
+            // Verify hot-reload WebSocket server was added to context
+            assert.ok(server.userContext.websocket, 'Context should have websocket')
+            assert.strictEqual(server.userContext.websocket, server.websocketServer, 'websocket should be the HotReloadSocketServer instance')
+            
+            // Verify Socket.IO server was added to context
+            assert.ok(server.userContext.io, 'Context should have io (Socket.IO server)')
+            assert.strictEqual(server.userContext.io, server.socketServer, 'io should be the Socket.IO server instance')
+            
+            // Verify original context values are preserved
+            assert.equal(server.userContext.customValue, 'test-123')
         } finally {
             await server.stop()
         }

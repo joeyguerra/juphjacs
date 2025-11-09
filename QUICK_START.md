@@ -176,7 +176,7 @@ node server.mjs
 
 ## Next Steps
 
-- Read **DEVSERVER_GUIDE.md** for architecture details
+- Read **SERVER_GUIDE.md** for architecture details
 - Create custom plugins
 - Add layouts and nested pages
 - Deploy to Netlify, Vercel, or GitHub Pages

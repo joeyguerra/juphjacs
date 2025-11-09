@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { startServer } from './src/application/DevServer.mjs'
+import { startServer } from './src/application/WebServer.mjs'
 
 // Start the development server
 await startServer()

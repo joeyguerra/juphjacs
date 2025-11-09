@@ -34,7 +34,7 @@ juphjacs is a static site generator with hot-reload capabilities. The architectu
       TemplateEngine.mjs    # Template literal rendering with script tag protection
     /hotreload
       FileWatcher.mjs       # File system watching
-      ReloadServer.mjs      # WebSocket server for hot reload
+      HotReloadSocketServer.mjs      # WebSocket server for hot reload
       HotReloader.mjs       # Client-side hot reload script
 ```
 
@@ -131,7 +131,7 @@ Renders template literals with:
 Three-part system for live browser updates:
 
 1. **FileWatcher** - Monitors file system for changes
-2. **ReloadServer** - WebSocket server that broadcasts changes
+2. **HotReloadSocketServer** - WebSocket server that broadcasts changes
 3. **HotReloader** - Client-side script that morphs DOM when changes occur
 
 ## Configuration

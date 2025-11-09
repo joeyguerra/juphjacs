@@ -3,7 +3,7 @@ import { PluginManager } from './plugins/PluginManager.mjs'
 import { SiteGenerator } from './SiteGenerator.mjs'
 import { PageRepository } from '../domain/pages/PageRepository.mjs'
 import { FileWatcher } from '../infrastructure/hotreload/FileWatcher.mjs'
-import { ReloadServer } from '../infrastructure/hotreload/ReloadServer.mjs'
+import { HotReloadSocketServer } from '../infrastructure/hotreload/HotReloadSocketServer.mjs'
 import { FileFilter } from '../infrastructure/FileFilter.mjs'
 import { Logger } from '../Logger.mjs'
 import { FetchRequest, FetchResponse } from '../infrastructure/http/FetchApi.mjs'
@@ -22,7 +22,7 @@ import { dirname } from 'node:path'
 import { readFile } from 'node:fs/promises'
 
 
-class JuphjacsDevelopmentServer {
+class JuphjacWebServer {
     constructor(config = {}) {
         this.config = config
         this.rootDir = config.rootDir || process.cwd()
@@ -40,7 +40,7 @@ class JuphjacsDevelopmentServer {
         // Server components
         this.httpServer = null
         this.socketServer = null
-        this.reloadServer = null
+        this.websocketServer = null
         this.fileWatcher = null
         this.siteGenerator = null
         this.handlerChain = null
@@ -50,7 +50,7 @@ class JuphjacsDevelopmentServer {
         // Load configuration
         const siteConfig = await this.configLoader.load()
         
-        this.logger.info('Initializing Juphjacs Development Server...')
+        this.logger.info('Initializing Juphjacs Web Server...')
         this.logger.info(`Pages folder: ${siteConfig.sourceFolder}`)
         this.logger.info(`Build folder: ${siteConfig.buildFolder}`)
         
@@ -142,7 +142,7 @@ class JuphjacsDevelopmentServer {
         return this
     }
 
-    async startDevServer(port = 3000) {
+    async start(port = 3000) {
         // Create HTTP server with FetchApi for modern request/response handling
         this.httpServer = createServer({
             IncomingMessage: FetchRequest,
@@ -154,14 +154,18 @@ class JuphjacsDevelopmentServer {
         // Create Socket.IO server
         this.socketServer = new SocketServer(this.httpServer)
         
-        // Create reload server
-        this.reloadServer = new ReloadServer(this.socketServer)
+        // Create hot-reload WebSocket server
+        this.websocketServer = new HotReloadSocketServer(this.socketServer)
         
-        this.reloadServer.on('connection', (clientId) => {
+        // Make hot-reload WebSocket server and raw Socket.IO server available to page objects via context
+        this.userContext.websocket = this.websocketServer
+        this.userContext.io = this.socketServer
+        
+        this.websocketServer.on('connection', (clientId) => {
             this.logger.info(`Client connected: ${clientId}`)
         })
 
-        this.reloadServer.on('disconnect', (clientId) => {
+        this.websocketServer.on('disconnect', (clientId) => {
             this.logger.info(`Client disconnected: ${clientId}`)
         })
 
@@ -220,11 +224,11 @@ class JuphjacsDevelopmentServer {
                 // Notify connected clients
                 if (this.fileFilter.getFileType(filePath) === 'css') {
                     // CSS-only reload (no page refresh)
-                    this.reloadServer.broadcastCssReload(page.route)
+                    this.websocketServer.broadcastCssReload(page.route)
                 } else {
                     // For HTML/JS/other files, broadcast to all clients
                     // This ensures reload works even if referer doesn't exactly match
-                    this.reloadServer.broadcast('reload', { 
+                    this.websocketServer.broadcast('reload', { 
                         route: page.route, 
                         filePath 
                     })
@@ -234,11 +238,11 @@ class JuphjacsDevelopmentServer {
             } else {
                 // No page found, but file was rebuilt - broadcast to all
                 this.logger.info(`✓ Rebuilt: ${filePath}`)
-                this.reloadServer.broadcast('reload', { filePath })
+                this.websocketServer.broadcast('reload', { filePath })
             }
         } catch (error) {
             this.logger.error(`Error rebuilding ${filePath}: ${error.message}`)
-            this.reloadServer.broadcast('error', { message: error.message, filePath })
+            this.websocketServer.broadcast('error', { message: error.message, filePath })
         }
     }
 
@@ -267,8 +271,8 @@ class JuphjacsDevelopmentServer {
             this.fileWatcher.close()
         }
 
-        if (this.reloadServer) {
-            this.reloadServer.close()
+        if (this.websocketServer) {
+            this.websocketServer.close()
         }
 
         if (this.httpServer) {
@@ -283,13 +287,13 @@ class JuphjacsDevelopmentServer {
 
 // CLI entry point
 async function startServer() {
-    const server = new JuphjacsDevelopmentServer({
+    const server = new JuphjacWebServer({
         logLevel: process.env.LOG_LEVEL || 'info'
     })
 
     try {
         await server.initialize()
-        await server.startDevServer(process.env.PORT || 3000)
+        await server.start(process.env.PORT || 3000)
         console.log(`✓ Server started successfully http://localhost:${process.env.PORT || 3000}`)
         console.log('Press Ctrl+C to stop the server')
     } catch (error) {
@@ -308,4 +312,4 @@ async function startServer() {
     process.on('SIGTERM', shutdown)
 }
 
-export { JuphjacsDevelopmentServer, startServer }
+export { JuphjacWebServer, startServer }

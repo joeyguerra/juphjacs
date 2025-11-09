@@ -1,6 +1,6 @@
 import EventEmitter from 'node:events'
 
-class ReloadServer extends EventEmitter {
+class HotReloadSocketServer extends EventEmitter {
     constructor(io, options = {}) {
         super()
         this.io = io
@@ -73,4 +73,4 @@ class ReloadServer extends EventEmitter {
     }
 }
 
-export { ReloadServer }
+export { HotReloadSocketServer }

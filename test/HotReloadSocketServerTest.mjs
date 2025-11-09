@@ -1,15 +1,15 @@
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert'
-import { ReloadServer } from '../src/infrastructure/hotreload/ReloadServer.mjs'
+import { HotReloadSocketServer } from '../src/infrastructure/hotreload/HotReloadSocketServer.mjs'
 import { createServer } from 'node:http'
 import { Server as SocketServer } from 'socket.io'
 import { io as ioClient } from 'socket.io-client'
 import { setTimeout as sleep } from 'node:timers/promises'
 
-describe('ReloadServer', () => {
+describe('HotReloadSocketServer', () => {
     let httpServer
     let socketServer
-    let reloadServer
+    let websocketServer
     let clients = []
 
     beforeEach(() => {
@@ -25,8 +25,8 @@ describe('ReloadServer', () => {
         clients = []
 
         // Close servers
-        if (reloadServer) {
-            await reloadServer.close()
+        if (websocketServer) {
+            await websocketServer.close()
         }
         
         if (socketServer) {
@@ -39,20 +39,20 @@ describe('ReloadServer', () => {
     })
 
     it('should create a reload server', () => {
-        reloadServer = new ReloadServer(socketServer)
-        assert.ok(reloadServer)
-        assert.ok(reloadServer.io)
-        assert.ok(reloadServer.namespace)
+        websocketServer = new HotReloadSocketServer(socketServer)
+        assert.ok(websocketServer)
+        assert.ok(websocketServer.io)
+        assert.ok(websocketServer.namespace)
     })
 
     it('should accept client connections', async () => {
-        reloadServer = new ReloadServer(socketServer)
+        websocketServer = new HotReloadSocketServer(socketServer)
         
         await new Promise(resolve => httpServer.listen(0, resolve))
         const port = httpServer.address().port
 
         let connectionCount = 0
-        reloadServer.on('connection', () => {
+        websocketServer.on('connection', () => {
             connectionCount++
         })
 
@@ -65,7 +65,7 @@ describe('ReloadServer', () => {
     })
 
     it('should broadcast reload messages to all clients', async () => {
-        reloadServer = new ReloadServer(socketServer)
+        websocketServer = new HotReloadSocketServer(socketServer)
         
         await new Promise(resolve => httpServer.listen(0, resolve))
         const port = httpServer.address().port
@@ -88,7 +88,7 @@ describe('ReloadServer', () => {
         await sleep(60)
 
         // Broadcast a reload
-        reloadServer.broadcast('reload', { file: 'test.html', content: '<h1>Test</h1>' })
+        websocketServer.broadcast('reload', { file: 'test.html', content: '<h1>Test</h1>' })
 
         await sleep(60)
 
@@ -97,7 +97,7 @@ describe('ReloadServer', () => {
     })
 
     it('should send file-changed events with content', async () => {
-        reloadServer = new ReloadServer(socketServer)
+        websocketServer = new HotReloadSocketServer(socketServer)
         
         await new Promise(resolve => httpServer.listen(0, resolve))
         const port = httpServer.address().port
@@ -119,7 +119,7 @@ describe('ReloadServer', () => {
             timestamp: Date.now()
         }
 
-        reloadServer.sendFileChanged(testData)
+        websocketServer.sendFileChanged(testData)
 
         await sleep(60)
 
@@ -129,13 +129,13 @@ describe('ReloadServer', () => {
     })
 
     it('should handle client disconnections', async () => {
-        reloadServer = new ReloadServer(socketServer)
+        websocketServer = new HotReloadSocketServer(socketServer)
         
         await new Promise(resolve => httpServer.listen(0, resolve))
         const port = httpServer.address().port
 
         let disconnectCount = 0
-        reloadServer.on('disconnect', () => {
+        websocketServer.on('disconnect', () => {
             disconnectCount++
         })
 
@@ -152,33 +152,33 @@ describe('ReloadServer', () => {
     })
 
     it('should track connected clients', async () => {
-        reloadServer = new ReloadServer(socketServer)
+        websocketServer = new HotReloadSocketServer(socketServer)
         
         await new Promise(resolve => httpServer.listen(0, resolve))
         const port = httpServer.address().port
 
-        assert.strictEqual(reloadServer.getClientCount(), 0)
+        assert.strictEqual(websocketServer.getClientCount(), 0)
 
         const client1 = ioClient(`http://localhost:${port}/hot-reload`)
         clients.push(client1)
         await sleep(60)
 
-        assert.strictEqual(reloadServer.getClientCount(), 1)
+        assert.strictEqual(websocketServer.getClientCount(), 1)
 
         const client2 = ioClient(`http://localhost:${port}/hot-reload`)
         clients.push(client2)
         await sleep(60)
 
-        assert.strictEqual(reloadServer.getClientCount(), 2)
+        assert.strictEqual(websocketServer.getClientCount(), 2)
 
         client1.disconnect()
         await sleep(60)
 
-        assert.strictEqual(reloadServer.getClientCount(), 1)
+        assert.strictEqual(websocketServer.getClientCount(), 1)
     })
 
     it('should support selective reload by URL pattern', async () => {
-        reloadServer = new ReloadServer(socketServer)
+        websocketServer = new HotReloadSocketServer(socketServer)
         
         await new Promise(resolve => httpServer.listen(0, resolve))
         const port = httpServer.address().port
@@ -200,7 +200,7 @@ describe('ReloadServer', () => {
         await sleep(60)
 
         // Reload only pages matching pattern
-        reloadServer.broadcastToUrl('/blog/', { file: 'post1.html' })
+        websocketServer.broadcastToUrl('/blog/', { file: 'post1.html' })
 
         await sleep(60)
 
@@ -210,17 +210,17 @@ describe('ReloadServer', () => {
     })
 
     it('should emit error events for problems', async () => {
-        reloadServer = new ReloadServer(socketServer)
+        websocketServer = new HotReloadSocketServer(socketServer)
         
         const errors = []
-        reloadServer.on('error', (error) => {
+        websocketServer.on('error', (error) => {
             errors.push(error)
         })
 
         await new Promise(resolve => httpServer.listen(0, resolve))
 
         // Try to send data before any clients connect - should handle gracefully
-        reloadServer.broadcast('reload', { file: 'test.html' })
+        websocketServer.broadcast('reload', { file: 'test.html' })
 
         await sleep(60)
 
@@ -229,7 +229,7 @@ describe('ReloadServer', () => {
     })
 
     it('should support CSS-only reload', async () => {
-        reloadServer = new ReloadServer(socketServer)
+        websocketServer = new HotReloadSocketServer(socketServer)
         
         await new Promise(resolve => httpServer.listen(0, resolve))
         const port = httpServer.address().port
@@ -245,14 +245,14 @@ describe('ReloadServer', () => {
 
         await sleep(60)
 
-        reloadServer.broadcastCssReload({ file: 'style.css' })
+        websocketServer.broadcastCssReload({ file: 'style.css' })
 
         await sleep(60)
         assert.strictEqual(cssReloadReceived, true)
     })
 
     it('should close all connections gracefully', async () => {
-        reloadServer = new ReloadServer(socketServer)
+        websocketServer = new HotReloadSocketServer(socketServer)
         
         await new Promise(resolve => httpServer.listen(0, resolve))
         const port = httpServer.address().port
@@ -263,12 +263,12 @@ describe('ReloadServer', () => {
 
         await sleep(60)
 
-        assert.strictEqual(reloadServer.getClientCount(), 2)
+        assert.strictEqual(websocketServer.getClientCount(), 2)
 
-        await reloadServer.close()
+        await websocketServer.close()
 
         await sleep(60)
 
-        assert.strictEqual(reloadServer.getClientCount(), 0)
+        assert.strictEqual(websocketServer.getClientCount(), 0)
     })
 })

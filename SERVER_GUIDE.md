@@ -1,11 +1,11 @@
-# Juphjacs - Development Server Guide
+# Juphjacs - Server Guide
 
 ## Quick Start
 
-### Using the New Development Server
+### Using the Server
 
 ```bash
-# Start the development server
+# Start the server
 npm start
 # or
 node server.mjs
@@ -63,7 +63,7 @@ The refactored Juphjacs follows Domain-Driven Design principles:
 - **MarkdownParser**: Parses markdown files with YAML frontmatter
 - **TemplateEngine**: Renders template literals with proper escaping
 - **FileWatcher**: Watches for file changes (uses chokidar)
-- **ReloadServer**: WebSocket server for hot-reload (uses socket.io)
+- **HotReloadSocketServer**: WebSocket server for hot-reload (uses socket.io)
 - **FileFilter**: Smart file filtering and type detection
 
 ## Plugin System
@@ -191,18 +191,18 @@ Hot-reload script is automatically injected into HTML pages.
 
 ## API Reference
 
-### JuphjacsDevelopmentServer
+### JuphjacWebServer
 
 ```javascript
-import { JuphjacsDevelopmentServer } from './index.mjs'
+import { JuphjacWebServer } from './index.mjs'
 
-const server = new JuphjacsDevelopmentServer({
+const server = new JuphjacWebServer({
     debug: true,
     rootDir: process.cwd()
 })
 
 await server.initialize()
-await server.startDevServer(3000)
+await server.start(3000)
 
 // Later...
 await server.stop()
@@ -213,7 +213,7 @@ await server.stop()
 You can inject dependencies (database, services, etc.) into your page objects using the `context` option:
 
 ```javascript
-import { JuphjacsDevelopmentServer } from './index.mjs'
+import { JuphjacWebServer } from './index.mjs'
 import { createDatabase } from './database.mjs'
 
 // Initialize your services
@@ -221,7 +221,7 @@ const db = await createDatabase()
 const logger = createLogger()
 const cache = new CacheService()
 
-const server = new JuphjacsDevelopmentServer({
+const server = new JuphjacWebServer({
     rootDir: process.cwd(),
     context: {
         db,           // Database connection
@@ -233,7 +233,7 @@ const server = new JuphjacsDevelopmentServer({
 })
 
 await server.initialize()
-await server.startDevServer(3000)
+await server.start(3000)
 ```
 
 **Page Implementation:**
@@ -278,6 +278,135 @@ class UsersPage {
 - ✅ Type-safe if using TypeScript
 - ✅ No global state
 - ✅ Explicit dependencies
+
+**WebSocket Access:**
+
+The hot-reload WebSocket server (`HotReloadSocketServer`) is automatically added to the context as `context.websocket`. This provides convenient methods for page hot-reloading and simple broadcasts:
+
+```javascript
+// pages/chat.mjs
+export default async function createPage(sourceFolder, filePath, template, context = {}) {
+    return new ChatPage(template, context)
+}
+
+class ChatPage {
+    constructor(template, context) {
+        this.template = template
+        this.db = context.db
+        this.websocket = context.websocket  // Hot-reload WebSocket server
+    }
+    
+    async post(req, res) {
+        const message = await req.json()
+        
+        // Save to database
+        await this.db.messages.create(message)
+        
+        // Broadcast to all connected clients (uses /hot-reload namespace)
+        this.websocket.broadcast('chat:message', {
+            user: message.user,
+            text: message.text,
+            timestamp: new Date()
+        })
+        
+        res.writeHead(201, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ success: true }))
+    }
+    
+    async get(req, res) {
+        // Send notification to specific client
+        const messages = await this.db.messages.findAll()
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ messages }))
+    }
+}
+```
+
+**Hot-Reload WebSocket Methods (context.websocket):**
+- `websocket.broadcast(event, data)` - Broadcast to all connected clients on /hot-reload namespace
+- `websocket.broadcastCssReload(route)` - Trigger CSS-only reload (no page refresh)
+- `websocket.sendFileChanged(data)` - Send file change notifications
+- `websocket.getClientCount()` - Get number of connected clients
+
+**Note:** `context.websocket` is a `HotReloadSocketServer` instance that uses the `/hot-reload` namespace. While you can use it for simple broadcasts, for production applications with multiple real-time features, use `context.io` (Socket.IO) directly to create dedicated namespaces.
+
+**Using Socket.IO Directly (Recommended for Production):**
+
+For advanced use cases, the raw Socket.IO server is available as `context.io`. This allows you to create custom namespaces, use rooms, and access the full Socket.IO API:
+
+```javascript
+// pages/advanced-chat.mjs
+export default async function createPage(sourceFolder, filePath, template, context = {}) {
+    return new AdvancedChatPage(template, context)
+}
+
+class AdvancedChatPage {
+    constructor(template, context) {
+        this.template = template
+        this.io = context.io  // Raw Socket.IO server
+        
+        // Create a custom namespace for chat (separate from /hot-reload)
+        this.chatNamespace = this.io.of('/chat')
+        
+        // Set up chat handlers
+        this.chatNamespace.on('connection', (socket) => {
+            console.log('User connected to chat')
+            
+            // Join a room
+            socket.on('join-room', (roomName) => {
+                socket.join(roomName)
+                this.chatNamespace.to(roomName).emit('user-joined', { 
+                    socketId: socket.id 
+                })
+            })
+            
+            // Send message to room
+            socket.on('message', (data) => {
+                this.chatNamespace.to(data.room).emit('message', {
+                    user: data.user,
+                    text: data.text,
+                    timestamp: new Date()
+                })
+            })
+        })
+    }
+    
+    async post(req, res) {
+        const { room, message } = await req.json()
+        
+        // Broadcast to specific room using Socket.IO API
+        this.chatNamespace.to(room).emit('message', message)
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ success: true }))
+    }
+}
+```
+
+**Client-side connection to custom namespace:**
+
+```html
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    // Connect to custom namespace
+    const chatSocket = io('/chat')
+    
+    chatSocket.emit('join-room', 'general')
+    
+    chatSocket.on('message', (data) => {
+        console.log('New message:', data)
+    })
+</script>
+```
+
+This gives you full access to Socket.IO features like:
+- Custom namespaces for different purposes
+- Rooms for targeted broadcasting
+- Middleware for authentication
+- Adapters for scaling across multiple servers
+
+````
 
 ### SiteGenerator (Refactored)
 

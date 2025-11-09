@@ -23,7 +23,7 @@ Create websites with fast feedback with your code to the left (or right) and a b
 - Plugin system for extensibility (BlogPlugin included)
 - Configuration-driven setup with `site.config.mjs`
 
-**📖 See [DEVSERVER_GUIDE.md](./DEVSERVER_GUIDE.md) for architecture details!**
+**📖 See [SERVER_GUIDE.md](./SERVER_GUIDE.md) for architecture details!**
 
 The name is a play on the KISS Principle (Keep It Simple Stupid). It's super hard to keep things simple, the name is a reminder to keep trying.
 
@@ -53,7 +53,7 @@ The framework follows DDD principles with clear layer separation:
 - **Markdown Support**: Write content in Markdown with YAML frontmatter
 - **Configuration-Driven**: Flexible `site.config.mjs` configuration
 
-**📖 See [DEVSERVER_GUIDE.md](./DEVSERVER_GUIDE.md) for architecture details!**
+**📖 See [SERVER_GUIDE.md](./SERVER_GUIDE.md) for architecture details!**
 
 # Quick Start
 
@@ -214,4 +214,65 @@ await startServer()
 const server = new JuphjacsDevelopmentServer({ debug: true })
 await server.initialize()
 await server.startDevServer(3000)
+
+// Access Socket.IO server for custom namespaces
+const chatNamespace = server.socketServer.of('/chat')
+chatNamespace.on('connection', (socket) => {
+    socket.on('message', (msg) => {
+        chatNamespace.emit('message', msg)
+    })
+})
+```
+
+## WebSocket / Socket.IO Access
+
+The framework provides both a convenient WebSocket wrapper and direct access to the Socket.IO server:
+
+```javascript
+const server = new JuphjacWebServer({
+    rootDir: process.cwd(),
+    context: {
+        db: myDatabase,
+        logger: myLogger
+    }
+})
+
+await server.initialize()
+await server.start(3000)
+
+// Direct Socket.IO access for custom namespaces
+const chatNS = server.socketServer.of('/chat')
+chatNS.on('connection', (socket) => {
+    console.log('User connected to chat')
+    
+    socket.on('message', (data) => {
+        chatNS.emit('message', data)
+    })
+})
+```
+
+Pages can access both the WebSocket wrapper and raw Socket.IO server via context:
+
+```javascript
+// pages/chat.mjs
+export default function(sourceFolder, filePath, template, context = {}) {
+    return {
+        io: context.io,              // Raw Socket.IO server
+        websocket: context.websocket, // Convenience wrapper
+        
+        post(req, res) {
+            // Use the wrapper for simple broadcasts
+            this.websocket.broadcast('notification', { message: 'Hello!' })
+            
+            // Or use Socket.IO directly for advanced features
+            const chatRoom = this.io.of('/chat')
+            chatRoom.to('room1').emit('message', { text: 'Hi room 1!' })
+        }
+    }
+}
+```
+
+**📖 See [SERVER_GUIDE.md](./SERVER_GUIDE.md) for complete WebSocket examples!**
+
+````
 ```

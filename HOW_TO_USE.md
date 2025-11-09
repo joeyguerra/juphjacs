@@ -552,7 +552,7 @@ class MyPage extends Page {
 ## Getting Help
 
 - **Examples**: Look at files in `test/html/` for working examples
-- **Architecture**: Read `DEVSERVER_GUIDE.md` for how it works
+- **Architecture**: Read `SERVER_GUIDE.md` for how it works
 
 ---
 
