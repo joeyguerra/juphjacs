@@ -208,6 +208,77 @@ await server.startDevServer(3000)
 await server.stop()
 ```
 
+### Passing Context to Pages
+
+You can inject dependencies (database, services, etc.) into your page objects using the `context` option:
+
+```javascript
+import { JuphjacsDevelopmentServer } from './index.mjs'
+import { createDatabase } from './database.mjs'
+
+// Initialize your services
+const db = await createDatabase()
+const logger = createLogger()
+const cache = new CacheService()
+
+const server = new JuphjacsDevelopmentServer({
+    rootDir: process.cwd(),
+    context: {
+        db,           // Database connection
+        logger,       // Logger instance
+        cache,        // Cache service
+        config: myAppConfig,  // App configuration
+        // ... any other services
+    }
+})
+
+await server.initialize()
+await server.startDevServer(3000)
+```
+
+**Page Implementation:**
+
+Your page factory function receives the context as a 4th parameter:
+
+```javascript
+// pages/users.mjs
+export default async function createPage(sourceFolder, filePath, template, context = {}) {
+    return new UsersPage(template, context)
+}
+
+class UsersPage {
+    constructor(template, context) {
+        this.template = template
+        this.db = context.db
+        this.logger = context.logger
+    }
+    
+    async get(req, res) {
+        // Use injected dependencies
+        const users = await this.db.users.findAll()
+        this.logger.info('Users page accessed')
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ users }))
+    }
+    
+    async post(req, res) {
+        const user = await this.db.users.create(req.body)
+        this.logger.info(`Created user: ${user.email}`)
+        
+        res.writeHead(201, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ user }))
+    }
+}
+```
+
+**Benefits:**
+- ✅ Clean dependency injection
+- ✅ Easy to test (mock context)
+- ✅ Type-safe if using TypeScript
+- ✅ No global state
+- ✅ Explicit dependencies
+
 ### SiteGenerator (Refactored)
 
 ```javascript
