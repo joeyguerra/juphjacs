@@ -18,7 +18,7 @@
   ],
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test",
+    "test": "node --test --test-timeout=10000",
     "dev": "node --env-file=.env --watch server.mjs"
   },
   "keywords": [

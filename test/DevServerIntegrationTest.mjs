@@ -1,0 +1,223 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { JuphjacsDevelopmentServer } from '../src/application/DevServer.mjs'
+
+await test('DevServer Integration - Dynamic Page Handling', async t => {
+    await t.test('should execute page.post() method for POST request', async () => {
+        const server = new JuphjacsDevelopmentServer({
+            rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
+            logLevel: 'error'
+        })
+        
+        await server.initialize()
+        await server.startDevServer(0) // use random port
+        
+        const port = server.httpServer.address().port
+        
+        try {
+            // Make a POST request to login page
+            const response = await fetch(`http://localhost:${port}/login.html`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username: 'admin',
+                    password: 'admin',
+                    csrf: '123456'
+                }),
+                redirect: 'manual' // Don't follow redirects
+            })
+            
+            // Should get a redirect
+            assert.equal(response.status, 302)
+            assert.equal(response.headers.get('Location'), '/admin.html')
+            assert.match(response.headers.get('Set-Cookie'), /session=admin/)
+        } finally {
+            await server.stop()
+        }
+    })
+    
+    await t.test('should execute page.get() method for GET request', async () => {
+        const server = new JuphjacsDevelopmentServer({
+            rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
+            logLevel: 'error'
+        })
+        
+        await server.initialize()
+        await server.startDevServer(0)
+        
+        const port = server.httpServer.address().port
+        
+        try {
+            const response = await fetch(`http://localhost:${port}/login.html`)
+            
+            assert.equal(response.status, 200)
+            assert.equal(response.headers.get('Content-Type'), 'text/html')
+            const html = await response.text()
+            assert.match(html, /Login/)
+        } finally {
+            await server.stop()
+        }
+    })
+    
+    await t.test('should serve framework resources', async () => {
+        const server = new JuphjacsDevelopmentServer({
+            rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
+            logLevel: 'error'
+        })
+        
+        await server.initialize()
+        await server.startDevServer(0)
+        
+        const port = server.httpServer.address().port
+        
+        try {
+            const response = await fetch(`http://localhost:${port}/__juphjacs__/HotReloader.mjs`)
+            
+            assert.equal(response.status, 200)
+            assert.equal(response.headers.get('Content-Type'), 'application/javascript')
+            const code = await response.text()
+            assert.match(code, /HotReloader/)
+        } finally {
+            await server.stop()
+        }
+    })
+    
+    await t.test('should serve static HTML pages without dynamic methods', async () => {
+        const server = new JuphjacsDevelopmentServer({
+            rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
+            logLevel: 'error'
+        })
+        
+        await server.initialize()
+        await server.startDevServer(0)
+        
+        const port = server.httpServer.address().port
+        
+        try {
+            // admin.html exists but doesn't have get() method, should serve static
+            const response = await fetch(`http://localhost:${port}/admin.html`)
+            
+            assert.equal(response.status, 200)
+            assert.equal(response.headers.get('Content-Type'), 'text/html')
+            const html = await response.text()
+            assert.match(html, /Admin/)
+            // Should have hot-reload injected
+            assert.match(html, /HotReloader/)
+        } finally {
+            await server.stop()
+        }
+    })
+    
+    await t.test('should serve static CSS files', async () => {
+        const server = new JuphjacsDevelopmentServer({
+            rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
+            logLevel: 'error'
+        })
+        
+        await server.initialize()
+        await server.startDevServer(0)
+        
+        const port = server.httpServer.address().port
+        
+        try {
+            const response = await fetch(`http://localhost:${port}/css/index.css`)
+            assert.equal(response.status, 200)
+            assert.equal(response.headers.get('content-type'), 'text/css')
+            const content = await response.text()
+            assert.ok(content.length > 0, 'CSS file should have content')
+        } finally {
+            await server.stop()
+        }
+    })
+    
+    await t.test('should serve static JavaScript files', async () => {
+        const server = new JuphjacsDevelopmentServer({
+            rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
+            logLevel: 'error'
+        })
+        
+        await server.initialize()
+        await server.startDevServer(0)
+        
+        const port = server.httpServer.address().port
+        
+        try {
+            const response = await fetch(`http://localhost:${port}/js/HotReloader.mjs`)
+            assert.equal(response.status, 200)
+            assert.equal(response.headers.get('content-type'), 'application/javascript')
+            const content = await response.text()
+            assert.ok(content.includes('HotReloader'), 'Should contain HotReloader code')
+        } finally {
+            await server.stop()
+        }
+    })
+    
+    await t.test('should return 404 for non-existent files', async () => {
+        const server = new JuphjacsDevelopmentServer({
+            rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
+            logLevel: 'error'
+        })
+        
+        await server.initialize()
+        await server.startDevServer(0)
+        
+        const port = server.httpServer.address().port
+        
+        try {
+            const response = await fetch(`http://localhost:${port}/does-not-exist.html`)
+            assert.equal(response.status, 404)
+            assert.equal(response.headers.get('content-type'), 'text/html')
+            const html = await response.text()
+            assert.match(html, /404/)
+            assert.match(html, /Not Found/)
+        } finally {
+            await server.stop()
+        }
+    })
+    
+    await t.test('should serve directory index.html when browsing to /blog', async () => {
+        const server = new JuphjacsDevelopmentServer({
+            rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
+            logLevel: 'error'
+        })
+        
+        await server.initialize()
+        await server.startDevServer(0)
+        
+        const port = server.httpServer.address().port
+        
+        try {
+            const response = await fetch(`http://localhost:${port}/blog`)
+            assert.equal(response.status, 200)
+            assert.equal(response.headers.get('content-type'), 'text/html')
+            const html = await response.text()
+            assert.ok(html.includes('Blog'), 'Should contain blog content')
+        } finally {
+            await server.stop()
+        }
+    })
+    
+    await t.test('should serve directory index.html when browsing to /blog/', async () => {
+        const server = new JuphjacsDevelopmentServer({
+            rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
+            logLevel: 'error'
+        })
+        
+        await server.initialize()
+        await server.startDevServer(0)
+        
+        const port = server.httpServer.address().port
+        
+        try {
+            const response = await fetch(`http://localhost:${port}/blog/`)
+            assert.equal(response.status, 200)
+            assert.equal(response.headers.get('content-type'), 'text/html')
+            const html = await response.text()
+            assert.ok(html.includes('Blog'), 'Should contain blog content')
+        } finally {
+            await server.stop()
+        }
+    })
+})

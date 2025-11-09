@@ -7,10 +7,20 @@ import { ReloadServer } from '../infrastructure/hotreload/ReloadServer.mjs'
 import { FileFilter } from '../infrastructure/FileFilter.mjs'
 import { Logger } from '../Logger.mjs'
 import { FetchRequest, FetchResponse } from '../infrastructure/http/FetchApi.mjs'
+import { RequestHandlerChain } from '../infrastructure/http/RequestHandlerChain.mjs'
+import { DynamicPageHandler } from '../infrastructure/http/DynamicPageHandler.mjs'
+import { FrameworkResourceHandler } from '../infrastructure/http/FrameworkResourceHandler.mjs'
+import { StaticPageHandler } from '../infrastructure/http/StaticPageHandler.mjs'
+import { StaticAssetHandler } from '../infrastructure/http/StaticAssetHandler.mjs'
+import { ErrorHandler } from '../infrastructure/http/ErrorHandler.mjs'
 import { join } from 'node:path'
 import { createServer } from 'node:http'
 import { Server as SocketServer } from 'socket.io'
 import pkg from '../../package.json' with { type: 'json' }
+import { fileURLToPath } from 'node:url'
+import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
+
 
 class JuphjacsDevelopmentServer {
     constructor(config = {}) {
@@ -31,6 +41,7 @@ class JuphjacsDevelopmentServer {
         this.reloadServer = null
         this.fileWatcher = null
         this.siteGenerator = null
+        this.handlerChain = null
     }
 
     async initialize() {
@@ -75,6 +86,55 @@ class JuphjacsDevelopmentServer {
         this.logger.info('Building site...')
         await this.siteGenerator.build()
         this.logger.info('✓ Site built successfully')
+
+        // Initialize request handler chain
+        this.handlerChain = new RequestHandlerChain()
+        
+        // Add framework resource handler (highest priority)
+        const frameworkResourceHandler = new FrameworkResourceHandler({
+            frameworkRoot: dirname(fileURLToPath(import.meta.url))
+        })
+        this.handlerChain.add(frameworkResourceHandler)
+        
+        // Add dynamic page handler
+        const dynamicPageHandler = new DynamicPageHandler({
+            pagesFolder: siteConfig.sourceFolder,
+            findPageByRoute: async (route) => {
+                // Find page in repository
+                const page = this.repository.findByRoute(route)
+                if (!page) return null
+                
+                // Load the page module to get the instance with methods
+                const moduleFilePath = page.filePath.replace(/\.(html|xml)$/, '.mjs')
+                try {
+                    const template = await readFile(page.filePath, 'utf-8')
+                    const pageModule = await import(moduleFilePath + '?t=' + Date.now())
+                    const pageInstance = await pageModule.default(siteConfig.sourceFolder, page.filePath, template)
+                    return pageInstance
+                } catch (error) {
+                    this.logger.debug(`No module found for ${page.filePath}: ${error.message}`)
+                    return null
+                }
+            }
+        })
+        
+        this.handlerChain.add(dynamicPageHandler)
+        
+        // Add static page handler
+        const staticPageHandler = new StaticPageHandler({
+            buildFolder: siteConfig.buildFolder
+        })
+        this.handlerChain.add(staticPageHandler)
+        
+        // Add static asset handler
+        const staticAssetHandler = new StaticAssetHandler({
+            buildFolder: siteConfig.buildFolder
+        })
+        this.handlerChain.add(staticAssetHandler)
+        
+        // Add error handler (terminal handler)
+        const errorHandler = new ErrorHandler()
+        this.handlerChain.add(errorHandler)
 
         return this
     }
@@ -184,161 +244,16 @@ class JuphjacsDevelopmentServer {
         
         this.logger.debug(`${req.method} ${url.pathname}`)
 
-        // Intercept framework resources (served from juphjacs itself)
-        if (url.pathname.startsWith('/__juphjacs__/')) {
-            return await this.serveFrameworkResource(url.pathname, res)
-        }
-
-        // Serve files from build directory
-        let filePath = url.pathname === '/' ? '/index.html' : url.pathname
-        let fullPath = join(await this.configLoader.load().then(c => c.buildFolder), filePath)
-
+        // Use handler chain - ErrorHandler is terminal, so this will always handle the request
         try {
-            const { readFile, stat } = await import('node:fs/promises')
-            
-            // Check if path is a directory
-            try {
-                const stats = await stat(fullPath)
-                if (stats.isDirectory()) {
-                    // Append index.html for directory paths
-                    filePath = filePath.endsWith('/') ? filePath + 'index.html' : filePath + '/index.html'
-                    fullPath = join(await this.configLoader.load().then(c => c.buildFolder), filePath)
-                }
-            } catch (statError) {
-                // If stat fails, continue with original path
-            }
-            
-            // Determine content type from extension first
-            const ext = filePath.split('.').pop().toLowerCase()
-            const contentTypes = {
-                // Text
-                'html': 'text/html',
-                'css': 'text/css',
-                'txt': 'text/plain',
-                'xml': 'application/xml',
-                'csv': 'text/csv',
-                
-                // JavaScript
-                'js': 'application/javascript',
-                'mjs': 'application/javascript',
-                'json': 'application/json',
-                
-                // Images
-                'png': 'image/png',
-                'jpg': 'image/jpeg',
-                'jpeg': 'image/jpeg',
-                'gif': 'image/gif',
-                'webp': 'image/webp',
-                'svg': 'image/svg+xml',
-                'ico': 'image/x-icon',
-                'bmp': 'image/bmp',
-                'tiff': 'image/tiff',
-                'tif': 'image/tiff',
-                
-                // Fonts
-                'woff': 'font/woff',
-                'woff2': 'font/woff2',
-                'ttf': 'font/ttf',
-                'otf': 'font/otf',
-                'eot': 'application/vnd.ms-fontobject',
-                
-                // Video
-                'mp4': 'video/mp4',
-                'webm': 'video/webm',
-                'ogg': 'video/ogg',
-                
-                // Audio
-                'mp3': 'audio/mpeg',
-                'wav': 'audio/wav',
-                'ogg': 'audio/ogg',
-                
-                // Documents
-                'pdf': 'application/pdf',
-                'zip': 'application/zip',
-                'tar': 'application/x-tar',
-                'gz': 'application/gzip'
-            }
-
-            // Determine if file is text or binary
-            const textExtensions = ['html', 'css', 'txt', 'xml', 'csv', 'js', 'mjs', 'json', 'svg']
-            const isText = textExtensions.includes(ext)
-            
-            // Read file with appropriate encoding
-            const content = isText 
-                ? await readFile(fullPath, 'utf-8')
-                : await readFile(fullPath)
-
-            // Inject hot-reload script for HTML files (only if not already present)
-            if (filePath.endsWith('.html')) {
-                // Check if HotReloader is already included
-                const hasHotReloader = content.includes('HotReloader') || content.includes('io(\'/hot-reload\')')
-                
-                let modifiedContent = content
-                
-                if (!hasHotReloader) {
-                    // Inject hot-reload script with DOM morphing
-                    const hotReloadScript = `
-<script src="/socket.io/socket.io.js"></script>
-<script type="module">
-  import { HotReloader } from '/__juphjacs__/HotReloader.mjs'
-  const socket = io('/hot-reload')
-  const reloader = new HotReloader(window, socket)
-</script>
-</body>`
-                    modifiedContent = content.replace('</body>', hotReloadScript)
-                }
-                
-                res.setHeader('Content-Type', 'text/html')
-                res.writeHead(200)
-                res.end(modifiedContent)
-            } else {
-                const contentType = contentTypes[ext] || 'application/octet-stream'
-                res.setHeader('Content-Type', contentType)
-                res.writeHead(200)
-                res.end(content)
-            }
+            await this.handlerChain.handle(req, res)
         } catch (error) {
-            if (error.code === 'ENOENT') {
-                res.writeHead(404, { 'Content-Type': 'text/html' })
-                res.end('<h1>404 Not Found</h1>')
-            } else {
-                this.logger.error(`Error serving ${url.pathname}: ${error.message}`)
+            this.logger.error(`Error in handler chain: ${error.message}`)
+            this.logger.error(error.stack)
+            if (!res.headersSent) {
                 res.writeHead(500, { 'Content-Type': 'text/html' })
                 res.end('<h1>500 Internal Server Error</h1>')
             }
-        }
-    }
-
-    async serveFrameworkResource(pathname, res) {
-        // Remove /__juphjacs__/ prefix
-        const resourcePath = pathname.replace('/__juphjacs__/', '')
-        
-        try {
-            const { readFile } = await import('node:fs/promises')
-            const { fileURLToPath } = await import('node:url')
-            const { dirname, join } = await import('node:path')
-            
-            // Get framework's root directory
-            const frameworkRoot = dirname(fileURLToPath(import.meta.url))
-            const resourceFile = join(frameworkRoot, '..', 'infrastructure', 'hotreload', resourcePath)
-            
-            const content = await readFile(resourceFile, 'utf-8')
-            
-            // Determine content type
-            const ext = resourcePath.split('.').pop()
-            const contentTypes = {
-                'mjs': 'application/javascript',
-                'js': 'application/javascript',
-                'css': 'text/css'
-            }
-            
-            res.setHeader('Content-Type', contentTypes[ext] || 'text/plain')
-            res.writeHead(200)
-            res.end(content)
-        } catch (error) {
-            this.logger.error(`Error serving framework resource ${pathname}: ${error.message}`)
-            res.writeHead(404, { 'Content-Type': 'text/plain' })
-            res.end('Framework resource not found')
         }
     }
 
