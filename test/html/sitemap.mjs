@@ -2,8 +2,8 @@ import { Page } from '../../src/domain/pages/Page.mjs'
 import { TemplateEngine } from '../../src/infrastructure/templates/TemplateEngine.mjs'
 
 class SitemapPage extends Page {
-    constructor (rootFolder, filePath, template, delegate = { broadcast: async () => {} }) {
-        super(rootFolder, filePath, template, delegate)
+    constructor (rootFolder, filePath, template, context = {}) {
+        super(rootFolder, filePath, template, context)
         this.title = 'Site Map'
         this.urls = [
             'https://example.com/',
@@ -20,6 +20,6 @@ class SitemapPage extends Page {
         res.end(this.content)
     }
 }
-export default async (rootFolder, filePath, template, delegate) => {
-    return new SitemapPage(rootFolder, filePath, template, delegate)
+export default async (rootFolder, filePath, template, context) => {
+    return new SitemapPage(rootFolder, filePath, template, context)
 }

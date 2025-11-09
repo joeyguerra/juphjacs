@@ -53,16 +53,16 @@ await startServer()
 import { Page } from 'juphjacs'
 
 class IndexPage extends Page {
-    constructor(pagesFolder, filePath, template, delegate) {
-        super(pagesFolder, filePath, template, delegate)
+    constructor(pagesFolder, filePath, template, context = {}) {
+        super(pagesFolder, filePath, template, context = {})
         this.title = 'Welcome to Juphjacs'
         this.heading = 'Hello, World!'
         this.message = 'Your static site generator is ready!'
     }
 }
 
-export default async (pagesFolder, filePath, template, delegate) => {
-    return new IndexPage(pagesFolder, filePath, template, delegate)
+export default async (pagesFolder, filePath, template, context = {}) => {
+    return new IndexPage(pagesFolder, filePath, template, context = {})
 }
 ```
 

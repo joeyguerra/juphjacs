@@ -151,8 +151,8 @@ class MyPlugin extends Plugin {
 import { Page } from 'juphjacs'
 
 class IndexPage extends Page {
-    constructor(pagesFolder, filePath, template, delegate) {
-        super(pagesFolder, filePath, template, delegate)
+    constructor(pagesFolder, filePath, template, context = {}) {
+        super(pagesFolder, filePath, template, context)
         this.title = 'My Site'
         this.heading = 'Welcome!'
         this.layout = './pages/layout.html'
@@ -165,8 +165,8 @@ class IndexPage extends Page {
     }
 }
 
-export default async (pagesFolder, filePath, template, delegate) => {
-    return new IndexPage(pagesFolder, filePath, template, delegate)
+export default async (pagesFolder, filePath, template, context = {}) => {
+    return new IndexPage(pagesFolder, filePath, template, context)
 }
 ```
 

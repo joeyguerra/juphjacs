@@ -188,8 +188,8 @@ export default async (pagesFolder, filePath, template) => {
 ```javascript
 import { Page } from '../src/domain/pages/Page.mjs'
 
-export default async (pagesFolder, filePath, template, delegate) => {
-    const page = new Page(pagesFolder, filePath, template, delegate)
+export default async (pagesFolder, filePath, template, context = {}) => {
+    const page = new Page(pagesFolder, filePath, template, context = {})
     page.title = 'My Page'
     page.layout = './layouts/main.html'
     return page

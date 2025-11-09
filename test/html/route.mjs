@@ -2,8 +2,8 @@ import { Page } from '../../src/domain/pages/Page.mjs'
 import { TemplateEngine } from '../../src/infrastructure/templates/TemplateEngine.mjs'
 
 class RoutePage extends Page {
-    constructor (rootFolder, filePath, template, delegate = { broadcast: async () => {} }) {
-        super(rootFolder, filePath, template, delegate)
+    constructor (rootFolder, filePath, template, context = {}) {
+        super(rootFolder, filePath, template, context)
         this.title = 'Routing page'
         this.layout = './test/html/layout.html'
         this.param = null
@@ -43,6 +43,6 @@ class RoutePage extends Page {
     }
 }
 
-export default async (rootFolder, filePath, template, delegate) => {
-    return new RoutePage(rootFolder, filePath, template, delegate)
+export default async (rootFolder, filePath, template, context) => {
+    return new RoutePage(rootFolder, filePath, template, context)
 }

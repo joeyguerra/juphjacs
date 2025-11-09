@@ -64,8 +64,8 @@ Visit: **http://localhost:3000/about.html**
 import { Page } from 'juphjacs'
 
 class AboutPage extends Page {
-    constructor(pagesFolder, filePath, template, delegate) {
-        super(pagesFolder, filePath, template, delegate)
+    constructor(pagesFolder, filePath, template, context = {}) {
+        super(pagesFolder, filePath, template, context = {})
         
         // Set data for template
         this.title = 'About Us'
@@ -75,8 +75,8 @@ class AboutPage extends Page {
     }
 }
 
-export default async (pagesFolder, filePath, template, delegate) => {
-    return new AboutPage(pagesFolder, filePath, template, delegate)
+export default async (pagesFolder, filePath, template, context = {}) => {
+    return new AboutPage(pagesFolder, filePath, template, context = {})
 }
 ```
 
@@ -120,8 +120,8 @@ The server automatically injects `${title}`, `${heading}`, etc. into your HTML!
 ```javascript
 // pages/about.mjs
 class AboutPage extends Page {
-    constructor(pagesFolder, filePath, template, delegate) {
-        super(pagesFolder, filePath, template, delegate)
+    constructor(pagesFolder, filePath, template, context = {}) {
+        super(pagesFolder, filePath, template, context = {})
         this.title = 'About'
         this.layout = './pages/layout.html'  // ← Use layout!
     }
@@ -207,16 +207,16 @@ console.log('Code blocks work too!')
 import { Page } from 'juphjacs'
 
 class BlogIndexPage extends Page {
-    constructor(pagesFolder, filePath, template, delegate) {
-        super(pagesFolder, filePath, template, delegate)
+    constructor(pagesFolder, filePath, template, context = {}) {
+        super(pagesFolder, filePath, template, context = {})
         this.title = 'Blog'
         this.layout = './pages/layout.html'
         // posts will be injected by BlogPlugin
     }
 }
 
-export default async (pagesFolder, filePath, template, delegate) => {
-    return new BlogIndexPage(pagesFolder, filePath, template, delegate)
+export default async (pagesFolder, filePath, template, context = {}) => {
+    return new BlogIndexPage(pagesFolder, filePath, template, context = {})
 }
 ```
 
@@ -249,8 +249,8 @@ ${message ? `<p class="success">${message}</p>` : ''}
 import { Page } from 'juphjacs'
 
 class ContactPage extends Page {
-    constructor(pagesFolder, filePath, template, delegate) {
-        super(pagesFolder, filePath, template, delegate)
+    constructor(pagesFolder, filePath, template, context = {}) {
+        super(pagesFolder, filePath, template, context = {})
         this.title = 'Contact'
         this.layout = './pages/layout.html'
         this.message = null
@@ -282,8 +282,8 @@ class ContactPage extends Page {
     }
 }
 
-export default async (pagesFolder, filePath, template, delegate) => {
-    return new ContactPage(pagesFolder, filePath, template, delegate)
+export default async (pagesFolder, filePath, template, context = {}) => {
+    return new ContactPage(pagesFolder, filePath, template, context = {})
 }
 ```
 
@@ -468,8 +468,8 @@ Create JSON API endpoints:
 import { Page } from 'juphjacs'
 
 class UsersAPI extends Page {
-    constructor(pagesFolder, filePath, template, delegate) {
-        super(pagesFolder, filePath, template, delegate)
+    constructor(pagesFolder, filePath, template, context = {}) {
+        super(pagesFolder, filePath, template, context = {})
     }
     
     async get(req, res) {
@@ -493,8 +493,8 @@ class UsersAPI extends Page {
     }
 }
 
-export default async (pagesFolder, filePath, template, delegate) => {
-    return new UsersAPI(pagesFolder, filePath, template, delegate)
+export default async (pagesFolder, filePath, template, context = {}) => {
+    return new UsersAPI(pagesFolder, filePath, template, context = {})
 }
 ```
 
@@ -538,8 +538,8 @@ async get(req, res) {
 import { UriToStaticFileRoute } from 'juphjacs'
 
 class MyPage extends Page {
-    constructor(pagesFolder, filePath, template, delegate) {
-        super(pagesFolder, filePath, template, delegate)
+    constructor(pagesFolder, filePath, template, context = {}) {
+        super(pagesFolder, filePath, template, context = {})
         
         // Custom route pattern
         this.route = new UriToStaticFileRoute('/custom-url', filePath)

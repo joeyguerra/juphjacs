@@ -9,7 +9,7 @@ const EVENTS = {
 }
 
 class Page {
-    constructor(pagesFolder, filePath, template, delegate = { broadcast: async () => {} }) {
+    constructor(pagesFolder, filePath, template, context = {}) {
         this.pagesFolder = pagesFolder
         this.filePath = filePath
         this.template = template
@@ -17,7 +17,7 @@ class Page {
         this.contentType = 'text/html'
         this.renderer = new TemplateEngine()
         this.route = new UriToStaticFileRoute(this.filePath.replace(this.pagesFolder, '').replace(/\\/g, '/'), this.filePath)
-        this.delegate = delegate
+        this.context = context
         this.uri = null
         this.layout = null
     }
@@ -60,7 +60,7 @@ class Page {
             const layoutHtml = await readFile(this.layout, 'utf-8')
             let layoutModule = {}
             try {
-                layoutModule = await (await import(this.layout.replace(/\.(html|xml)$/, '.mjs'))).default(this.pagesFolder, this.layout, layoutHtml, this.delegate)
+                layoutModule = await (await import(this.layout.replace(/\.(html|xml)$/, '.mjs'))).default(this.pagesFolder, this.layout, layoutHtml, this.context)
             } catch (e) {
                 // Layout module is optional
             }
