@@ -2,6 +2,7 @@ class DynamicPageHandler {
     constructor(options = {}) {
         this.pagesFolder = options.pagesFolder
         this.findPageByRoute = options.findPageByRoute
+        this.context = options.context || {}
     }
 
     async handle(req, res) {

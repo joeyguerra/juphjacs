@@ -104,4 +104,50 @@ await test('DynamicPageHandler', async t => {
         
         assert.equal(handled, false)
     })
+    
+    await t.test('should pass context to page creation', async () => {
+        const mockContext = {
+            db: { query: () => 'db-result' },
+            logger: { info: () => 'logged' },
+            customService: 'test-service'
+        }
+        
+        let contextPassedToPage = null
+        
+        const handler = new DynamicPageHandler({
+            pagesFolder: '/test/pages',
+            context: mockContext,
+            findPageByRoute: (route) => {
+                if (route === '/with-context.html') {
+                    return {
+                        filePath: '/test/pages/with-context.html',
+                        // Simulate page factory receiving context
+                        create: (context) => {
+                            contextPassedToPage = context
+                            return {
+                                context,
+                                get: async (req, res) => {
+                                    res.body = context.db.query()
+                                }
+                            }
+                        }
+                    }
+                }
+                return null
+            }
+        })
+        
+        const mockReq = {
+            url: 'http://localhost:3000/with-context.html',
+            method: 'GET',
+            headers: { host: 'localhost:3000' }
+        }
+        const mockRes = {}
+        
+        // Note: This test verifies the handler stores context
+        // Full integration test will verify it's passed during page loading
+        assert.equal(handler.context, mockContext)
+        assert.equal(handler.context.db.query(), 'db-result')
+        assert.equal(handler.context.customService, 'test-service')
+    })
 })

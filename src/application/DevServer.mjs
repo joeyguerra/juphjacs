@@ -28,6 +28,8 @@ class JuphjacsDevelopmentServer {
         this.rootDir = config.rootDir || process.cwd()
         // Set log level: 'debug', 'info', 'warning', 'error'
         this.logger = new Logger(pkg.name, null, config.logLevel)
+        // Store user-provided context for passing to pages
+        this.userContext = config.context || {}
         
         // Initialize components
         this.configLoader = new ConfigLoader(this.rootDir)
@@ -99,6 +101,7 @@ class JuphjacsDevelopmentServer {
         // Add dynamic page handler
         const dynamicPageHandler = new DynamicPageHandler({
             pagesFolder: siteConfig.sourceFolder,
+            context: this.userContext,
             findPageByRoute: async (route) => {
                 // Find page in repository
                 const page = this.repository.findByRoute(route)
@@ -109,7 +112,7 @@ class JuphjacsDevelopmentServer {
                 try {
                     const template = await readFile(page.filePath, 'utf-8')
                     const pageModule = await import(moduleFilePath + '?t=' + Date.now())
-                    const pageInstance = await pageModule.default(siteConfig.sourceFolder, page.filePath, template)
+                    const pageInstance = await pageModule.default(siteConfig.sourceFolder, page.filePath, template, this.userContext)
                     return pageInstance
                 } catch (error) {
                     this.logger.debug(`No module found for ${page.filePath}: ${error.message}`)

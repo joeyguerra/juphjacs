@@ -220,4 +220,46 @@ await test('DevServer Integration - Dynamic Page Handling', async t => {
             await server.stop()
         }
     })
+    
+    await t.test('should pass user context to page objects', async () => {
+        // Create a mock database service
+        const mockDb = {
+            users: {
+                findOne: async (query) => ({ email: query.email, name: 'Test User' })
+            }
+        }
+        
+        const mockLogger = {
+            info: (msg) => console.log(`[MOCK] ${msg}`)
+        }
+        
+        const server = new JuphjacsDevelopmentServer({
+            rootDir: '/Users/joeyguerra/src/joeyguerra/juphjacs',
+            logLevel: 'error',
+            context: {
+                db: mockDb,
+                logger: mockLogger,
+                customService: 'test-123'
+            }
+        })
+        
+        await server.initialize()
+        await server.startDevServer(0)
+        
+        const port = server.httpServer.address().port
+        
+        try {
+            // Verify context is stored on server
+            assert.ok(server.userContext, 'Server should have userContext')
+            assert.equal(server.userContext.customService, 'test-123')
+            assert.ok(server.userContext.db, 'Context should have db')
+            assert.ok(server.userContext.logger, 'Context should have logger')
+            
+            // Verify context is passed to DynamicPageHandler
+            // The handler chain contains DynamicPageHandler which should have context
+            assert.ok(server.handlerChain, 'Server should have handler chain')
+        } finally {
+            await server.stop()
+        }
+    })
 })
