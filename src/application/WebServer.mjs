@@ -30,7 +30,9 @@ class JuphjacWebServer {
         this.logger = new Logger(pkg.name, null, config.logLevel)
         // Store user-provided context for passing to pages
         this.userContext = config.context || {}
-        
+        if (!this.userContext.logger) {
+            this.userContext.logger = this.logger
+        }
         // Initialize components
         this.configLoader = new ConfigLoader(this.rootDir)
         this.pluginManager = new PluginManager()
