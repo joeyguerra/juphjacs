@@ -236,7 +236,7 @@ class JuphjacWebServer {
                     })
                 }
                 
-                this.logger.info(`✓ Rebuilt and reloaded: ${page.route}`)
+                this.logger.info(`✓ Rebuilt and reloaded: ${JSON.stringify(page.route)}`)
             } else {
                 // No page found, but file was rebuilt - broadcast to all
                 this.logger.info(`✓ Rebuilt: ${filePath}`)
