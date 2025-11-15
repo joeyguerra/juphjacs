@@ -224,23 +224,33 @@ class JuphjacWebServer {
             
             if (page) {
                 // Notify connected clients
-                if (this.fileFilter.getFileType(filePath) === 'css') {
+                const fileType = this.fileFilter.getFileType(filePath)
+                
+                if (fileType === 'css') {
                     // CSS-only reload (no page refresh)
                     this.websocketServer.broadcastCssReload(page.route)
                 } else {
-                    // For HTML/JS/other files, broadcast to all clients
-                    // This ensures reload works even if referer doesn't exactly match
-                    this.websocketServer.broadcast('reload', { 
-                        route: page.route, 
-                        filePath 
+                    // For HTML/JS/MD files, send file-changed event with page content
+                    // Client will use the content to morph the DOM (no full reload)
+                    // Only send serializable page data (no methods/functions)
+                    this.websocketServer.sendFileChanged({
+                        page: {
+                            content: page.content,
+                            route: page.route,
+                            filePath: page.filePath,
+                            title: page.title,
+                            uri: page.uri
+                        },
+                        filePath,
+                        fileType
                     })
                 }
                 
                 this.logger.info(`✓ Rebuilt and reloaded: ${JSON.stringify(page.route)}`)
             } else {
-                // No page found, but file was rebuilt - broadcast to all
+                // No page found, but file was rebuilt - send generic reload
                 this.logger.info(`✓ Rebuilt: ${filePath}`)
-                this.websocketServer.broadcast('reload', { filePath })
+                this.websocketServer.sendFileChanged({ filePath })
             }
         } catch (error) {
             this.logger.error(`Error rebuilding ${filePath}: ${error.message}`)

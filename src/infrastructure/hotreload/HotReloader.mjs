@@ -26,7 +26,16 @@ class HotReloader {
         // File changed event with details
         this.socket.on('file-changed', async (data) => {
             console.log('[HotReload] File changed:', data)
-            await this.morphDOM()
+            
+            // Full reload for JavaScript files since scripts won't re-execute with DOM morphing
+            if (data.fileType === 'javascript' || data.filePath?.match(/\.(js|mjs)$/)) {
+                console.log('[HotReload] JavaScript changed, doing full reload...')
+                this.window.location.reload()
+                return
+            }
+            
+            // DOM morphing for HTML/MD files (preserves state)
+            await this.morphDOM(data)
         })
 
         // Error from server
@@ -48,23 +57,9 @@ class HotReloader {
      * Fetch the latest HTML and morph the DOM to match
      * This updates only what changed without losing state
      */
-    async morphDOM() {
+    async morphDOM(data) {
         try {
-            // Fetch the latest version of the current page
-            const response = await fetch(this.window.location.href, {
-                headers: {
-                    'Cache-Control': 'no-cache',
-                    'Pragma': 'no-cache'
-                }
-            })
-
-            if (!response.ok) {
-                console.error('[HotReload] Failed to fetch updated page:', response.status)
-                this.window.location.reload()
-                return
-            }
-
-            const newHTML = await response.text()
+            const newHTML = data.page.content
             const parser = new DOMParser()
             const newDoc = parser.parseFromString(newHTML, 'text/html')
 
