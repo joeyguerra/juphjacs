@@ -190,10 +190,10 @@ await test('Server Integration - Dynamic Page Handling', async t => {
         
         try {
             const response = await fetch(`http://localhost:${port}/blog`)
-            assert.equal(response.status, 200)
+            const body = await response.text()
+            assert.equal(response.status, 200, `Expected 200 but got ${response.status}: ${body.substring(0, 200)}`)
             assert.equal(response.headers.get('content-type'), 'text/html')
-            const html = await response.text()
-            assert.ok(html.includes('Blog'), 'Should contain blog content')
+            assert.ok(body.includes('Blog'), 'Should contain blog content')
         } finally {
             await server.stop()
         }

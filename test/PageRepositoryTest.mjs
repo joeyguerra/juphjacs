@@ -2,6 +2,7 @@ import { describe, it, beforeEach } from 'node:test'
 import assert from 'node:assert'
 import { PageRepository } from '../src/domain/pages/PageRepository.mjs'
 import { Page } from '../src/domain/pages/Page.mjs'
+import { UriToStaticFileRoute } from '../src/infrastructure/routing/UriToStaticFileRoute.mjs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdir, writeFile, rm } from 'node:fs/promises'
@@ -102,6 +103,57 @@ describe('PageRepository', () => {
         
         const found = repository.findByRoute('/about.html')
         assert.strictEqual(found.uri, '/about.html')
+    })
+
+    it('should find pages with directory paths and trailing slashes', () => {
+        // Simulate a page at /guide-successful-software/index.html
+        const guidePage = new Page(testDir, join(testDir, 'guide-successful-software', 'index.html'), '<h1>Guide</h1>')
+        guidePage.uri = '/guide-successful-software/index.html'
+        // Route should match both /guide-successful-software/ and /guide-successful-software
+        guidePage.route = {
+            test: (path) => {
+                return path === '/guide-successful-software/' || 
+                       path === '/guide-successful-software' ||
+                       path === '/guide-successful-software/index.html'
+            }
+        }
+        
+        repository.save(guidePage)
+        
+        // Should find with trailing slash
+        const foundWithSlash = repository.findByRoute('/guide-successful-software/')
+        assert.strictEqual(foundWithSlash.uri, '/guide-successful-software/index.html')
+        
+        // Should find without trailing slash
+        const foundWithoutSlash = repository.findByRoute('/guide-successful-software')
+        assert.strictEqual(foundWithoutSlash.uri, '/guide-successful-software/index.html')
+        
+        // Should find with explicit index.html
+        const foundWithIndex = repository.findByRoute('/guide-successful-software/index.html')
+        assert.strictEqual(foundWithIndex.uri, '/guide-successful-software/index.html')
+    })
+
+    it('should match directory routes using UriToStaticFileRoute', () => {
+        // Test actual UriToStaticFileRoute behavior for index.html pages
+        const guidePage = new Page(testDir, join(testDir, 'guide-successful-software', 'index.html'), '<h1>Guide</h1>')
+        guidePage.uri = '/guide-successful-software/index.html'
+        
+        // Create route as Page class does - just the file path
+        const routePath = '/guide-successful-software/index.html'
+        guidePage.route = new UriToStaticFileRoute(routePath, guidePage.filePath)
+        
+        repository.save(guidePage)
+        
+        // Test what matches with UriToStaticFileRoute implementation
+        const exactMatch = repository.findByRoute('/guide-successful-software/index.html')
+        assert.ok(exactMatch, 'Should match exact path /guide-successful-software/index.html')
+        
+        // UriToStaticFileRoute now handles directory paths automatically for index.html
+        const dirSlash = repository.findByRoute('/guide-successful-software/')
+        const dirNoSlash = repository.findByRoute('/guide-successful-software')
+        
+        assert.ok(dirSlash, 'Should match /guide-successful-software/ for index.html')
+        assert.ok(dirNoSlash, 'Should match /guide-successful-software for index.html')
     })
 
     it('should clear all pages', () => {
