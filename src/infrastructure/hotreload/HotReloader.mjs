@@ -13,29 +13,50 @@ class HotReloader {
     setupListeners() {
         // Smart reload with DOM morphing
         this.socket.on('reload', async (data) => {
-            console.log('[HotReload] Reloading page...', data)
+            console.debug('[HotReload] Reloading page...', data)
             await this.morphDOM()
         })
 
         // CSS-only reload (no page refresh)
         this.socket.on('css-reload', () => {
-            console.log('[HotReload] Reloading CSS...')
+            console.debug('[HotReload] Reloading CSS...')
             this.reloadStylesheets()
         })
 
         // File changed event with details
-        this.socket.on('file-changed', async (data) => {
-            console.log('[HotReload] File changed:', data)
+        this.socket.on('file-changed', async (/** @type {import('./HotReloadEvent.mjs').HotReloadEvent} */ data) => {
+            console.debug('[HotReload] File changed:', data)
             
-            // Full reload for JavaScript files since scripts won't re-execute with DOM morphing
-            if (data.fileType === 'javascript' || data.filePath?.match(/\.(js|mjs)$/)) {
-                console.log('[HotReload] JavaScript changed, doing full reload...')
-                this.window.location.reload()
+            // Only apply if the change targets this page
+            const currentPath = this.window.location.pathname
+            const targetPath = this.resolveTargetPath(data)
+            if (targetPath && !this.routesMatch(currentPath, targetPath)) {
+                console.debug('[HotReload] Ignoring change for different route', { currentPath, targetPath })
                 return
             }
-            
-            // DOM morphing for HTML/MD files (preserves state)
-            await this.morphDOM(data)
+
+            // Use HMR strategy from server if provided, fallback to file type detection
+            const strategy = data.hmrStrategy || this.detectStrategy(data)
+            console.info('[HotReload] Using HMR strategy:', strategy)
+            switch (strategy) {
+                case 'full-reload':
+                    console.info('[HotReload] Full reload required...')
+                    this.window.location.reload()
+                    break
+                
+                case 'dom-morph':
+                    console.info('[HotReload] Morphing DOM...')
+                    await this.morphDOM(data)
+                    break
+                
+                case 'css-only':
+                    console.info('[HotReload] Reloading CSS...')
+                    this.reloadStylesheets()
+                    break
+                
+                default:
+                    console.info('[HotReload] No reload strategy for this file type')
+            }
         })
 
         // Error from server
@@ -45,21 +66,83 @@ class HotReloader {
 
         // Connection events
         this.socket.on('connect', () => {
-            console.log('[HotReload] Connected to hot-reload server')
+            console.info('[HotReload] Connected to hot-reload server')
         })
 
         this.socket.on('disconnect', () => {
-            console.log('[HotReload] Disconnected from hot-reload server')
+            console.info('[HotReload] Disconnected from hot-reload server')
+            this.reconnect()
         })
+
+        // Reconnection lifecycle
+        this.socket.on('connect_error', (err) => {
+            console.warn('[HotReload] Connection error:', err?.message || err)
+        })
+
+        this.socket.on('reconnect_attempt', (attempt) => {
+            console.info('[HotReload] Reconnect attempt:', attempt)
+        })
+
+        this.socket.on('reconnect', () => {
+            console.info('[HotReload] Reconnected. Syncing page to latest...')
+            // Ensure we didn't miss updates while disconnected
+            this.window.location.reload()
+        })
+
+        this.socket.on('reconnect_failed', () => {
+            console.error('[HotReload] Reconnect failed')
+        })
+    }
+
+    /**
+     * Resolve target route from event payload
+     * @param {import('./HotReloadEvent.mjs').HotReloadEvent} data - Hot reload event
+     * @returns {string|null} URL path for the changed page
+     */
+    resolveTargetPath(data = {}) {
+        return data.route || null
+    }
+
+    // Compare normalized routes
+    routesMatch(current, target) {
+        const normalize = p => {
+            let s = String(p || '').split('#')[0].split('?')[0]
+            if (!s.startsWith('/')) s = '/' + s
+            s = s.replace(/\/index\.html$/i, '/')
+            if (s.length > 1 && s.endsWith('/')) s = s.slice(0, -1)
+            return s
+        }
+        return normalize(current) === normalize(target)
+    }
+
+    /**
+     * Detect HMR strategy from file data (fallback for older servers)
+     * @param {Object} data - File change data
+     * @returns {string} HMR strategy
+     */
+    detectStrategy(data) {
+        // Check for JavaScript files
+        if (data.assetType === 'js' || data.fileType === 'javascript' || data.filePath?.match(/\.(js|mjs)$/)) {
+            return 'full-reload'
+        }
+        
+        // Check for CSS files
+        if (data.assetType === 'css' || data.fileType === 'css') {
+            return 'css-only'
+        }
+        
+        // Default to DOM morphing for HTML/MD
+        return 'dom-morph'
     }
 
     /**
      * Fetch the latest HTML and morph the DOM to match
      * This updates only what changed without losing state
+     * @param {import('./HotReloadEvent.mjs').HotReloadEvent} data - Hot reload event with content
      */
     async morphDOM(data) {
         try {
-            const newHTML = data.page.content
+            const newHTML = data.content
             const parser = new DOMParser()
             const newDoc = parser.parseFromString(newHTML, 'text/html')
 
@@ -74,7 +157,7 @@ class HotReloader {
             // Update head elements (but preserve hot-reload scripts)
             this.updateHead(newDoc.head)
 
-            console.log('[HotReload] DOM morphed successfully')
+            console.info('[HotReload] DOM morphed successfully')
         } catch (error) {
             console.error('[HotReload] Error morphing DOM:', error)
             // Fall back to full reload on error
@@ -235,6 +318,13 @@ class HotReloader {
         })
     }
 
+    reconnect() {
+        if (this.socket && !this.socket.connected) {
+            console.info('[HotReload] Attempting to reconnect...')
+            this.socket.connect()
+        }
+    }
+    
     disconnect() {
         if (this.socket) {
             this.socket.disconnect()

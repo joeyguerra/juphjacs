@@ -46,6 +46,39 @@ class HotReloadSocketServer extends EventEmitter {
         this.broadcast('css-reload', data)
     }
 
+    emitToPath(event, path, data) {
+        for (const { socket, referer } of this.clients.values()) {
+            try {
+                const url = new URL(referer)
+                const pathname = url.pathname || '/'
+                if (this.pathsMatch(pathname, path)) {
+                    socket.emit(event, data)
+                }
+            } catch {
+                // If referer is missing or invalid, skip targeted send
+            }
+        }
+    }
+
+    sendFileChangedToPath(path, data) {
+        this.emitToPath('file-changed', path, data)
+    }
+
+    broadcastCssReloadToPath(path, data) {
+        this.emitToPath('css-reload', path, data)
+    }
+
+    pathsMatch(current, target) {
+        const normalize = (p) => {
+            let s = String(p || '').split('#')[0].split('?')[0]
+            if (!s.startsWith('/')) s = '/' + s
+            s = s.replace(/\/index\.html$/i, '/')
+            if (s.length > 1 && s.endsWith('/')) s = s.slice(0, -1)
+            return s
+        }
+        return normalize(current) === normalize(target)
+    }
+
     broadcastToUrl(urlPattern, data) {
         for (const { socket, referer } of this.clients.values()) {
             if (referer.includes(urlPattern)) {

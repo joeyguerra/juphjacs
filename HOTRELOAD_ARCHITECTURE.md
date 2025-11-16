@@ -1,4 +1,4 @@
-# Hot-Reload Architecture
+# Hot Reload Architecture
 
 ## Problem Solved
 
@@ -11,17 +11,15 @@ HotReloader is now served directly from the juphjacs framework installation via 
 ## Architecture
 
 ```
-User Request: /__juphjacs__/HotReloader.mjs
+User request: /__juphjacs__/HotReloader.mjs
                     ↓
-         DevServer.handleRequest()
+   RequestHandlerChain
                     ↓
-    Intercepts /__juphjacs__/* paths
+FrameworkResourceHandler intercepts /__juphjacs__/*
                     ↓
-    DevServer.serveFrameworkResource()
+Resolves to src/infrastructure/hotreload/HotReloader.mjs
                     ↓
-    Resolves to: src/infrastructure/hotreload/HotReloader.mjs
-                    ↓
-    Serves file with correct content-type
+Serves file with correct content type
 ```
 
 ## File Locations
@@ -45,69 +43,43 @@ pages/
 
 ## Request Flow
 
-### 1. HTML Page Request
+### 1. HTML page request
 ```javascript
 GET /index.html
-→ DevServer checks: Not /__juphjacs__/* 
+→ WebServer routes through RequestHandlerChain 
 → Serves from user's build folder
 → Auto-injects hot-reload script if missing
 ```
 
-### 2. Framework Resource Request
+### 2. Framework resource request
 ```javascript
 GET /__juphjacs__/HotReloader.mjs
-→ DevServer checks: Starts with /__juphjacs__/
-→ Calls serveFrameworkResource()
-→ Resolves to framework installation path
+→ FrameworkResourceHandler resolves to framework installation path
 → Serves from src/infrastructure/hotreload/HotReloader.mjs
 ```
 
-### 3. File Change Event
+### 3. File change event
 ```javascript
 File changed: pages/index.html
 → FileWatcher emits 'change' event
-→ DevServer rebuilds file
-→ HotReloadSocketServer broadcasts via Socket.IO
-→ HotReloader.mjs receives event
-→ Fetches updated HTML
-→ Morphs DOM (preserves state)
+→ WebServer rebuilds file
+→ AssetPolicy.getMeta(filePath) returns { assetType, hmrStrategy }
+→ HotReloadSocketServer sends 'file-changed' with meta and content
+→ HotReloader receives event and executes strategy
+    - CSS_ONLY → reload styles
+    - DOM_MORPH → fetch and morph DOM
+    - FULL_RELOAD → window.location.reload()
 ```
 
 ## Code Implementation
 
-### DevServer.handleRequest()
+### Framework resource handling
 
 ```javascript
-async handleRequest(req, res) {
-    const url = new URL(req.url, `http://${req.headers.host}`)
-    
-    // Intercept framework resources
-    if (url.pathname.startsWith('/__juphjacs__/')) {
-        return await this.serveFrameworkResource(url.pathname, res)
-    }
-    
-    // Serve user files from build directory
-    const filePath = url.pathname === '/' ? '/index.html' : url.pathname
-    const fullPath = join(buildFolder, filePath)
-    // ... serve user file
-}
+// See src/infrastructure/http/FrameworkResourceHandler.mjs
 ```
 
-### DevServer.serveFrameworkResource()
-
-```javascript
-async serveFrameworkResource(pathname, res) {
-    const resourcePath = pathname.replace('/__juphjacs__/', '')
-    
-    // Get framework's installation directory
-    const frameworkRoot = dirname(fileURLToPath(import.meta.url))
-    const resourceFile = join(frameworkRoot, '..', 'infrastructure', 'hotreload', resourcePath)
-    
-    const content = await readFile(resourceFile, 'utf-8')
-    res.setHeader('Content-Type', 'application/javascript')
-    res.end(content)
-}
-```
+### Client injection
 
 ### Automatic Injection
 
@@ -146,7 +118,7 @@ Hot-reload works immediately with zero configuration.
 ### ✅ Consistent Behavior
 All projects using juphjacs get the same hot-reload experience.
 
-## DOM Morphing
+## DOM morphing
 
 The HotReloader uses intelligent DOM morphing instead of full page reloads:
 
@@ -190,7 +162,7 @@ import { FormValidator } from '/__juphjacs__/FormValidator.mjs'
 
 ## Testing
 
-All 126 tests pass, including:
+Representative coverage includes:
 - ✅ File watching and hot-reload
 - ✅ DOM morphing functionality
 - ✅ Template rendering with nullish coalescing
@@ -199,8 +171,9 @@ All 126 tests pass, including:
 
 ## Related Files
 
-- `src/application/WebServer.mjs` - Request handling and injection
+- `src/application/WebServer.mjs` - Request handling and orchestration
 - `src/infrastructure/hotreload/HotReloader.mjs` - Client-side DOM morphing
 - `src/infrastructure/hotreload/FileWatcher.mjs` - File system monitoring
 - `src/infrastructure/hotreload/HotReloadSocketServer.mjs` - WebSocket server
+- `src/policy/AssetPolicy.mjs` - HMR strategy and asset classification
 - `FRAMEWORK_RESOURCES.md` - Documentation

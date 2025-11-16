@@ -2,10 +2,9 @@
 
 ## Quick Start
 
-### Using the Server
+### Using the server
 
 ```bash
-# Start the server
 npm start
 # or
 node server.mjs
@@ -14,10 +13,6 @@ node server.mjs
 The server will:
 - Load your `site.config.mjs` configuration
 - Build your site from the `pages/` directory
-- Start a development server with hot-reload
-- Watch for file changes and rebuild automatically
-
-### Configuration
 
 Create a `site.config.mjs` file (see `site.config.example.mjs` for a template):
 
@@ -35,10 +30,6 @@ export default {
     plugins: [
         {
             name: 'BlogPlugin',
-            path: './src/application/plugins/BlogPlugin.mjs',
-            options: {
-                blogPath: '/blog'
-            }
         }
     ]
 }
@@ -53,8 +44,8 @@ The refactored Juphjacs follows Domain-Driven Design principles:
 - **PageRepository**: Manages the collection of pages, provides querying capabilities
 
 ### Application Layer (`src/application/`)
+- **WebServer**: Development server with hot-reload, HTTP handling, and orchestration
 - **SiteGenerator**: Orchestrates the build process, coordinates plugins and infrastructure
-- **DevServer**: Development server with hot-reload capabilities
 - **PluginManager**: Manages plugin lifecycle and hooks
 - **Plugin**: Base class for creating plugins
 - **ConfigLoader**: Loads and validates site configuration
@@ -64,7 +55,18 @@ The refactored Juphjacs follows Domain-Driven Design principles:
 - **TemplateEngine**: Renders template literals with proper escaping
 - **FileWatcher**: Watches for file changes (uses chokidar)
 - **HotReloadSocketServer**: WebSocket server for hot-reload (uses socket.io)
-- **FileFilter**: Smart file filtering and type detection
+
+### Policy Layer (`src/policy/`)
+- **PathPolicy**: include/ignore patterns and layout detection
+- **AssetPolicy**: asset classification, processing rules, and HMR strategy
+
+### HTTP Handling (`src/infrastructure/http/`)
+- **RequestHandlerChain**: Chains handlers to process requests
+- **FrameworkResourceHandler**: Serves `/__juphjacs__/*` framework resources
+- **DynamicPageHandler**: Executes page object methods for dynamic routes
+- **StaticPageHandler**: Serves generated HTML from `_site`
+- **StaticAssetHandler**: Serves static assets with correct MIME types
+- **ErrorHandler**: Terminal handler producing 4xx/5xx responses
 
 ## Plugin System
 
@@ -149,9 +151,9 @@ export { MyPlugin }
 
 ## File Processing
 
-### Automatic File Filtering
+### Automatic path filtering
 
-The `FileFilter` automatically skips:
+The `PathPolicy` automatically skips:
 - `node_modules/`
 - Hidden files (`.git/`, `.DS_Store`, `.env`)
 - Build directories (`_site/`, `dist/`, `build/`)
@@ -166,26 +168,18 @@ Files are processed based on type:
 - **Assets** (images, fonts): Copied as-is
 - **Data** (JSON): Copied as-is
 
-### Custom Filters
+Custom filtering is currently managed internally by `PathPolicy` defaults
 
-Add custom filters in `site.config.mjs`:
+## Hot Reload
 
-```javascript
-fileFilter: {
-    ignore: ['**/drafts/**', '**/*.tmp'],
-    include: ['**/*.html', '**/*.md'],  // Whitelist mode
-    layoutPatterns: ['**/layout.html', '**/_*.html']
-}
-```
+The development server provides strategy-driven hot reload:
 
-## Hot-Reload
-
-The development server provides intelligent hot-reload:
-
-- **HTML/Markdown changes**: Full page reload
+- **HTML/Markdown changes**: DOM morph without a full reload
 - **CSS changes**: CSS-only reload (no page refresh)
-- **Layout changes**: Rebuilds all pages using that layout
-- **Asset changes**: Copies and reloads
+- **JavaScript changes**: Full page reload
+- **Asset changes**: No reload by default
+
+Under the hood, the server determines `{ assetType, hmrStrategy }` via `AssetPolicy.getMeta(filePath)` and sends `file-changed` events including these fields. The client `HotReloader` executes the appropriate strategy.
 
 Hot-reload script is automatically injected into HTML pages.
 
@@ -323,7 +317,7 @@ class ChatPage {
 }
 ```
 
-**Hot-Reload WebSocket Methods (context.websocket):**
+**Hot-reload WebSocket methods (context.websocket):**
 - `websocket.broadcast(event, data)` - Broadcast to all connected clients on /hot-reload namespace
 - `websocket.broadcastCssReload(route)` - Trigger CSS-only reload (no page refresh)
 - `websocket.sendFileChanged(data)` - Send file change notifications
@@ -408,7 +402,7 @@ This gives you full access to Socket.IO features like:
 
 ````
 
-### SiteGenerator (Refactored)
+### SiteGenerator
 
 ```javascript
 import { SiteGenerator } from './index.mjs'
@@ -437,7 +431,7 @@ npm test
 
 # Run specific test suite
 npm test -- test/BlogPluginTest.mjs
-npm test -- test/FileFilterTest.mjs
+npm test -- test/PolicyTest.mjs
 npm test -- test/SiteGeneratorRefactoredTest.mjs
 ```
 

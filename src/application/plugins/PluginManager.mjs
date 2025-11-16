@@ -33,6 +33,25 @@ class PluginManager {
         return result
     }
 
+    /**
+     * Collect results from all plugins for a hook
+     * Each plugin may return a value or array; arrays are flattened
+     * @param {string} hookName
+     * @param {any} arg
+     * @returns {Promise<any[]>}
+     */
+    async collectHookResults(hookName, arg) {
+        const results = []
+        for (const plugin of this.plugins) {
+            if (typeof plugin[hookName] === 'function') {
+                const r = await plugin[hookName](arg)
+                if (Array.isArray(r)) results.push(...r)
+                else if (r !== undefined && r !== null) results.push(r)
+            }
+        }
+        return results
+    }
+
     getPlugin(name) {
         return this.pluginsByName.get(name)
     }

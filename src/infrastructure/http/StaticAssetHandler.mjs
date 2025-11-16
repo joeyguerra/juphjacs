@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 class StaticAssetHandler {
@@ -74,7 +74,6 @@ class StaticAssetHandler {
         
         try {
             // Check if path is a directory
-            const { stat } = await import('node:fs/promises')
             const stats = await stat(fullPath)
             if (stats.isDirectory()) {
                 // Let StaticPageHandler handle directory -> index.html resolution

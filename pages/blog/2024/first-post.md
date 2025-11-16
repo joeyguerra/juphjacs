@@ -1,5 +1,5 @@
 ---
-title: 'Common Software Design Strategy'
+title: 'My first post with juphjacs'
 layout: './pages/blog/layout.html'
 excerpt: 'Many strategies for designing software. One is to follow your nose by implementing a functionality at a time, serially.'
 published: '2024-02-07'

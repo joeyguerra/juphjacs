@@ -356,8 +356,8 @@ The server automatically watches for changes:
 - Styles update instantly while you edit
 
 ### ✅ HTML/Markdown Changes
-- **Full page reload** with new content
-- Changes appear immediately
+- **DOM morph** with updated content
+- Preserves input values, focus, and scroll position
 
 ### ✅ JavaScript Changes
 - **Full page reload** to ensure consistency

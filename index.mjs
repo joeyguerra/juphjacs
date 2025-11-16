@@ -21,10 +21,13 @@ export { MarkdownParser } from './src/infrastructure/markdown/MarkdownParser.mjs
 export { TemplateEngine } from './src/infrastructure/templates/TemplateEngine.mjs'
 export { FileWatcher } from './src/infrastructure/hotreload/FileWatcher.mjs'
 export { HotReloadSocketServer } from './src/infrastructure/hotreload/HotReloadSocketServer.mjs'
-export { FileFilter } from './src/infrastructure/FileFilter.mjs'
 export { UriToStaticFileRoute } from './src/infrastructure/routing/UriToStaticFileRoute.mjs'
 export { RequestBodyParser } from './src/infrastructure/http/RequestBodyParser.mjs'
 export { FetchRequest, FetchResponse } from './src/infrastructure/http/FetchApi.mjs'
 
 // Utilities
 export { Logger } from './src/Logger.mjs'
+
+// Policy Layer
+export { AssetPolicy, AssetType, HmrStrategy } from './src/policy/AssetPolicy.mjs'
+export { PathPolicy } from './src/policy/PathPolicy.mjs'

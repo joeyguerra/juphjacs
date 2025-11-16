@@ -4,7 +4,9 @@ import { SiteGenerator } from './SiteGenerator.mjs'
 import { PageRepository } from '../domain/pages/PageRepository.mjs'
 import { FileWatcher } from '../infrastructure/hotreload/FileWatcher.mjs'
 import { HotReloadSocketServer } from '../infrastructure/hotreload/HotReloadSocketServer.mjs'
-import { FileFilter } from '../infrastructure/FileFilter.mjs'
+import { HotReloadEvent } from '../infrastructure/hotreload/HotReloadEvent.mjs'
+import { AssetPolicy, HmrStrategy, AssetType } from '../policy/AssetPolicy.mjs'
+import { PathPolicy } from '../policy/PathPolicy.mjs'
 import { Logger } from '../Logger.mjs'
 import { FetchRequest, FetchResponse } from '../infrastructure/http/FetchApi.mjs'
 import { RequestHandlerChain } from '../infrastructure/http/RequestHandlerChain.mjs'
@@ -37,7 +39,8 @@ class JuphjacWebServer {
         this.configLoader = new ConfigLoader(this.rootDir)
         this.pluginManager = new PluginManager()
         this.repository = new PageRepository(this.rootDir)
-        this.fileFilter = new FileFilter(config.fileFilter || {})
+        this.assetPolicy = new AssetPolicy()
+        this.pathPolicy = new PathPolicy()
         
         // Server components
         this.httpServer = null
@@ -174,7 +177,7 @@ class JuphjacWebServer {
         // Start file watcher
         const siteConfig = await this.configLoader.load()
         this.fileWatcher = new FileWatcher(siteConfig.sourceFolder, {
-            ignore: this.fileFilter.ignorePatterns,
+            ignore: this.pathPolicy.ignorePatterns,
             debounce: 300
         })
 
@@ -210,7 +213,7 @@ class JuphjacWebServer {
         this.logger.info(`File ${event}: ${filePath}`)
 
         // Check if file should be processed
-        if (!this.fileFilter.shouldProcess(filePath)) {
+        if (!this.pathPolicy.shouldProcess(filePath)) {
             this.logger.debug(`Skipping: ${filePath}`)
             return
         }
@@ -221,31 +224,73 @@ class JuphjacWebServer {
 
             // Get the page from repository
             const page = this.repository.findByFilePath(filePath)
-            
             if (page) {
-                // Notify connected clients
-                const fileType = this.fileFilter.getFileType(filePath)
-                
-                if (fileType === 'css') {
-                    // CSS-only reload (no page refresh)
-                    this.websocketServer.broadcastCssReload(page.route)
-                } else {
-                    // For HTML/JS/MD files, send file-changed event with page content
-                    // Client will use the content to morph the DOM (no full reload)
-                    // Only send serializable page data (no methods/functions)
-                    this.websocketServer.sendFileChanged({
-                        page: {
-                            content: page.content,
-                            route: page.route,
-                            filePath: page.filePath,
-                            title: page.title,
-                            uri: page.uri
-                        },
-                        filePath,
-                        fileType
-                    })
+                // Notify connected clients based on HMR strategy
+                const { assetType, hmrStrategy } = this.assetPolicy.getMeta(filePath)
+                this.logger.debug(`Asset type: ${assetType}, HMR strategy: ${hmrStrategy}`)
+                switch (hmrStrategy) {
+                    case HmrStrategy.CSS_ONLY:
+                        // CSS-only reload (targeted to this page's URL)
+                        {
+                            const urlPath = '/' + page.filePath
+                                .replace(this.siteGenerator.config.sourceFolder, '')
+                                .replace(/\\/g, '/')
+                                .replace(/\.md$/i, '.html')
+                            this.websocketServer.broadcastCssReloadToPath(urlPath, { filePath: page.filePath })
+                        }
+                        break
+                    
+                    case HmrStrategy.DOM_MORPH:
+                    case HmrStrategy.FULL_RELOAD:
+                        // For HTML/JS/MD files, send file-changed event with page content
+                        // Client decides whether to morph DOM or full reload based on file type
+                        // Only send serializable page data (no methods/functions)
+                        // Send targeted update to clients on this page's route
+                        const urlPath = page.filePath
+                            .replace(this.siteGenerator.config.sourceFolder, '')
+                            .replace(/\\/g, '/')
+                            .replace(/\.md$/i, '.html')
+
+                        const event = HotReloadEvent.fromPage(urlPath, page, assetType, hmrStrategy)
+                        this.websocketServer.sendFileChangedToPath(urlPath, event)
+                        // Ask plugins which additional pages are affected and rebuild them
+                        try {
+                            const affectedFiles = await this.pluginManager.collectHookResults('onFileChanged', {
+                                filePath,
+                                page,
+                                repository: this.repository,
+                                site: this.siteGenerator.config
+                            })
+                            const uniqueFiles = Array.from(new Set(affectedFiles.filter(Boolean)))
+                            for (const f of uniqueFiles) {
+                                try {
+                                    const affectedPage = await this.siteGenerator.buildFile(f)
+                                    if (!affectedPage) continue
+                                    const meta = this.assetPolicy.getMeta(affectedPage.filePath)
+                                    const affectedUrlPath = affectedPage.filePath
+                                        .replace(this.siteGenerator.config.sourceFolder, '')
+                                        .replace(/\\/g, '/')
+                                        .replace(/\.md$/i, '.html')
+                                    const evt = HotReloadEvent.fromPage(
+                                        affectedUrlPath,
+                                        affectedPage,
+                                        meta.assetType,
+                                        meta.hmrStrategy
+                                    )
+                                    this.websocketServer.sendFileChangedToPath(affectedUrlPath, evt)
+                                } catch (err) {
+                                    this.logger.debug(`Skipping affected rebuild for ${f}: ${err.message}`)
+                                }
+                            }
+                        } catch (e) {
+                            this.logger.debug(`Plugin affected pages error: ${e.message}`)
+                        }
+                        break
+                    
+                    case HmrStrategy.NONE:
+                        // No reload needed for static assets
+                        break
                 }
-                
                 this.logger.info(`✓ Rebuilt and reloaded: ${JSON.stringify(page.route)}`)
             } else {
                 // No page found, but file was rebuilt - send generic reload

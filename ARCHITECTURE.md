@@ -4,11 +4,13 @@ This document describes the architecture.
 
 ## Overview
 
-juphjacs is a static site generator with hot-reload capabilities. The architecture is organized into three main layers:
+juphjacs is a static site generator with hot-reload capabilities. The architecture is organized into layers:
 
-1. **Domain Layer** - Core business entities and logic
-2. **Application Layer** - Application services, plugins, and orchestration
-3. **Infrastructure Layer** - Technical implementations (file I/O, templates, markdown)
+1. **Domain Layer** - Core entities and logic
+2. **Application Layer** - Services and orchestration
+3. **Infrastructure Layer** - Adapters and technical implementations
+4. **Policy Layer** - Classification and processing policies
+5. **HTTP Handling** - Chain-of-responsibility request handling
 
 ## Directory Structure
 
@@ -20,12 +22,20 @@ juphjacs is a static site generator with hot-reload capabilities. The architectu
       PageRepository.mjs    # Repository for managing pages
   
   /application
+    /http
+      RequestHandlerChain.mjs
+      FrameworkResourceHandler.mjs
+      DynamicPageHandler.mjs
+      StaticPageHandler.mjs
+      StaticAssetHandler.mjs
+      ErrorHandler.mjs
     /plugins
       Plugin.mjs            # Base plugin class
       PluginManager.mjs     # Plugin lifecycle management
     /config
       ConfigLoader.mjs      # Configuration loading and validation
     SiteGenerator.mjs       # Main site generation orchestrator
+    WebServer.mjs           # Dev server + hot reload
   
   /infrastructure
     /markdown
@@ -36,6 +46,10 @@ juphjacs is a static site generator with hot-reload capabilities. The architectu
       FileWatcher.mjs       # File system watching
       HotReloadSocketServer.mjs      # WebSocket server for hot reload
       HotReloader.mjs       # Client-side hot reload script
+
+  /policy
+    AssetPolicy.mjs         # AssetType + HmrStrategy + rules
+    PathPolicy.mjs          # include/ignore/layout patterns
 ```
 
 ## Core Concepts
@@ -132,7 +146,27 @@ Three-part system for live browser updates:
 
 1. **FileWatcher** - Monitors file system for changes
 2. **HotReloadSocketServer** - WebSocket server that broadcasts changes
-3. **HotReloader** - Client-side script that morphs DOM when changes occur
+3. **HotReloader** - Client-side script that executes strategy
+
+#### Policy Layer
+
+- **AssetPolicy**
+  - Classifies assets (`AssetType`)
+  - Determines HMR strategy (`HmrStrategy`)
+  - Exposes `getMeta(filePath)` returning `{ assetType, hmrStrategy }`
+- **PathPolicy**
+  - Default ignore/include patterns
+  - Layout detection via `isLayoutFile()`
+  - `shouldProcess(filePath)` for watcher/build decisions
+
+#### HTTP Handling
+
+Requests flow through a chain of handlers:
+- `FrameworkResourceHandler` → serves `/__juphjacs__/*`
+- `DynamicPageHandler` → executes page object methods
+- `StaticPageHandler` → serves generated HTML
+- `StaticAssetHandler` → serves assets
+- `ErrorHandler` → terminal fallback
 
 ## Configuration
 

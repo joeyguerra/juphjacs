@@ -12,18 +12,21 @@
 
 ## A web site framework
 
-Create websites with fast feedback with your code to the left (or right) and a browser to the right (or left). As you edit the code, the page updates, reflecting the changes (Hot Reload).
+Create websites with fast feedback with your code to the left (or right) and a browser to the right (or left). As you edit the code, the page updates, reflecting the changes via strategy-driven hot reload.
 
 - Use HTML or Markdown documents.
 - Write vanilla JavaScript and CSS.
 - Generates a static site under `_site`.
 - Pages can have corresponding `.mjs` files that export a class extending `Page`
 - Template literals (`${variable}`) are rendered server-side
-- Hot-reload via WebSocket (full reload for HTML/JS, CSS-only for styles)
+- Hot-reload via WebSocket
+    - DOM morph for HTML and Markdown
+    - CSS-only for styles
+    - Full reload for JavaScript
 - Plugin system for extensibility (BlogPlugin included)
 - Configuration-driven setup with `site.config.mjs`
 
-**📖 See [SERVER_GUIDE.md](./SERVER_GUIDE.md) for architecture details!**
+**📖 See [SERVER_GUIDE.md](./SERVER_GUIDE.md) and [ARCHITECTURE.md](./ARCHITECTURE.md) for architecture details**
 
 The name is a play on the KISS Principle (Keep It Simple Stupid). It's super hard to keep things simple, the name is a reminder to keep trying.
 
@@ -46,14 +49,48 @@ The framework follows DDD principles with clear layer separation:
 
 ## Key Features
 
-- **Hot Reload**: Automatic page updates via WebSocket (full reload for HTML/JS, CSS-only for styles)
+- **Hot Reload**: Strategy-driven updates via WebSocket
+    - DOM morph for HTML and Markdown
+    - CSS-only for styles
+    - Full reload for JavaScript
 - **Plugin System**: Extend functionality with custom plugins (BlogPlugin included)
 - **Template Engine**: Server-side template literal rendering
 - **Static Generation**: Build optimized static sites for deployment
 - **Markdown Support**: Write content in Markdown with YAML frontmatter
 - **Configuration-Driven**: Flexible `site.config.mjs` configuration
 
-**📖 See [SERVER_GUIDE.md](./SERVER_GUIDE.md) for architecture details!**
+**📖 See [SERVER_GUIDE.md](./SERVER_GUIDE.md) and [HOTRELOAD_ARCHITECTURE.md](./HOTRELOAD_ARCHITECTURE.md) for more**
+
+# Why?
+
+I built this framework because I wanted the run-time performance of a static site, with a delightful developer experience - fast feedback loops - while also staying close to the browser API, as opposed to what libraries like React do; JSX, more tooling and compile steps.
+
+Am I re-inventing the wheel here? Are there any other frameworks on the web that have similar strategies and values?
+
+> Similar philosophies exist, but this blend (static-first + page object methods + DOM morph hot reload + raw browser APIs) is still a distinct niche.
+
+## Closest related approaches (and differences) as of 2025-11-15:
+
+- **Eleventy / Jekyll / Hugo**: static generation only, no runtime page methods or websocket DOM morphing
+- **Astro**: static + islands; still component/domain specific, not plain HTML + page object methods
+- **Vite / Parcel dev servers**: fast HMR, but module/component oriented, not HTML diff morphing at page level
+- **Hotwire / Turbo / Unpoly / htmx**: partial HTML replacement over HTTP, but generally request/response initiated by client, not server‑pushed morph diffs on file change
+- **htmx + a static generator**: could approximate pieces, but you'd hand-roll integration
+- **Remix / Next.js / SvelteKit / Nuxt**: route modules with server methods (loaders/actions), but tie you into a full SSR/component abstraction
+- **Fresh (Deno)**: islands + server rendering, but still JSX/components
+- **Phoenix LiveView / Laravel Livewire**: stateful socket updates to DOM, but framework-managed diffing with server state - not plain file content morphing after static regen
+- **VitePress / Docusaurus**: markdown → static site with dev server, no dynamic per‑page HTTP verbs
+- **htmx + a static generator**: could approximate pieces, but you'd hand-roll integration
+
+## What’s distinct in this system:
+
+- **Page object** get/post/put/delete directly, without heavier routing abstractions
+- **Static build artifacts** plus selective dynamic method execution without adopting a component DSL
+- **DOM morphing** of regenerated HTML on file change (server push) instead of full reload or client-driven partial fetch
+- **User context injection** (db, io, websocket) while keeping pages **template-centric**
+- Explicit **hot reload** strategies per asset type
+
+It's in the ‘HTML-first, progressive enhancement, fast feedback’ space—adjacent to Hotwire/htmx + Eleventy — but more opinionated about the dev ergonomics (automatic DOM morph on save, websocket layer exposed, page object methods).
 
 # Quick Start
 
@@ -78,7 +115,7 @@ LOG_LEVEL=debug npm start
 PORT=8080 npm start
 ```
 
-The server will build your site from `pages/` to `_site/` and start watching for changes with hot-reload at `http://localhost:3000`.
+The server builds your site from `pages/` to `_site/` and watches for changes with hot-reload at `http://localhost:3000`.
 
 ## Configuration
 
@@ -107,7 +144,8 @@ Requests load static HTML pages generated at build time. The development server 
 
 - File change detected → Static file regenerated → Browser updated instantly
 - CSS changes reload styles only (no full page refresh)
-- HTML/JS changes trigger full page reload with WebSocket notification
+- HTML/Markdown changes morph the DOM without a full reload
+- JavaScript changes trigger a full page reload
 
 ## Plugin Architecture
 
@@ -186,39 +224,42 @@ Write your content in Markdown!
 
 # Architecture
 
+## Layers and Components
+
+- Application: `WebServer`, `SiteGenerator`, `ConfigLoader`, `PluginManager`
+- Domain: `Page`, `PageRepository`
+- Infrastructure: Markdown, Templates, FileWatcher, HotReloadSocketServer
+- Policy: `AssetPolicy` (asset classification, processing rules, HMR strategy), `PathPolicy` (include/ignore/layout)
+- HTTP Handlers: `FrameworkResourceHandler`, `DynamicPageHandler`, `StaticPageHandler`, `StaticAssetHandler`, `ErrorHandler` composed via `RequestHandlerChain`
+
+See `ARCHITECTURE.md` for details
+
 # API Reference
 
 ```javascript
 import {
-    // Development Server
-    startServer,                    // Quick start development server
-    JuphjacsDevelopmentServer,     // Full control over dev server
-    
-    // Core
-    SiteGenerator,                  // Static site generation
-    Page,                          // Base class for pages
-    
-    // Plugins
-    PluginManager,                 // Manage plugins
-    Plugin,                        // Base class for plugins
-    BlogPlugin,                    // Built-in blog functionality
-    
-    // Configuration
-    ConfigLoader                   // Load site.config.mjs
+    startServer,
+    JuphjacWebServer,
+    SiteGenerator,
+    Page,
+    PluginManager,
+    Plugin,
+    BlogPlugin,
+    ConfigLoader
 } from 'juphjacs'
 
-// Quick start
+// Quick start server
 await startServer()
 
 // Custom server
-const server = new JuphjacsDevelopmentServer({ debug: true })
+const server = new JuphjacWebServer({ logLevel: 'info' })
 await server.initialize()
-await server.startDevServer(3000)
+await server.start(3000)
 
 // Access Socket.IO server for custom namespaces
 const chatNamespace = server.socketServer.of('/chat')
-chatNamespace.on('connection', (socket) => {
-    socket.on('message', (msg) => {
+chatNamespace.on('connection', socket => {
+    socket.on('message', msg => {
         chatNamespace.emit('message', msg)
     })
 })
@@ -272,7 +313,7 @@ export default function(sourceFolder, filePath, template, context = {}) {
 }
 ```
 
-**📖 See [SERVER_GUIDE.md](./SERVER_GUIDE.md) for complete WebSocket examples!**
+**📖 See [SERVER_GUIDE.md](./SERVER_GUIDE.md) for complete WebSocket examples**
 
 ````
 ```

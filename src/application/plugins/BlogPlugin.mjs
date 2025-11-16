@@ -1,5 +1,5 @@
 import { Plugin } from './Plugin.mjs'
-import { sep } from 'node:path'
+import { join } from 'node:path'
 
 class BlogPost {
     constructor({ title, published, excerpt, slug, link, tags = [], image, year }) {
@@ -65,6 +65,23 @@ class BlogPlugin extends Plugin {
             page.posts = this.getSortedPosts()
         }
         return page
+    }
+
+    /**
+     * Declare that when a blog post changes, the blog index page needs rebuild
+     * @param {{filePath:string, page:Object, repository:Object, site:{sourceFolder:string}}} change
+     * @returns {Promise<string[]>}
+     */
+    async onFileChanged(change) {
+        try {
+            const { filePath, site } = change
+            // If a blog post changed, mark the blog index as affected
+            if (this.isBlogPost({ filePath })) {
+                const indexAbs = join(site.sourceFolder, this.config.blogIndexPath)
+                return [indexAbs]
+            }
+        } catch {}
+        return []
     }
 
     isBlogPost(page) {

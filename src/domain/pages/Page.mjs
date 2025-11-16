@@ -2,7 +2,9 @@ import { UriToStaticFileRoute } from '../../infrastructure/routing/UriToStaticFi
 import { readFile } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { TemplateEngine } from '../../infrastructure/templates/TemplateEngine.mjs'
+import { AssetType } from '../../policy/AssetPolicy.mjs'
 
+/** @enum {string} */
 const EVENTS = {
     TEMPLATE_RENDERED: 'template rendered',
     PRE_TEMPLATE_RENDER: 'pre template render'
@@ -12,6 +14,9 @@ class Page {
     constructor(pagesFolder, filePath, template, context = {}) {
         this.pagesFolder = pagesFolder
         this.filePath = filePath
+        
+        /** @type {AssetType} */
+        this.fileType = resolve(filePath).endsWith('.md') ? AssetType.MARKDOWN : AssetType.HTML
         this.template = template
         this.content = null
         this.contentType = 'text/html'

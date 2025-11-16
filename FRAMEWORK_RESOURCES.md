@@ -43,17 +43,17 @@ If you want to manually include it in your layout:
 
 ## How It Works
 
-1. **Request Interception:** The `DevServer.handleRequest()` method intercepts requests starting with `/__juphjacs__/`
-2. **Framework Path Resolution:** Resolves the resource path relative to the framework's installation directory
-3. **Content Serving:** Serves the file with appropriate content-type headers
-4. **Automatic Injection:** For HTML pages without existing hot-reload code, the dev server automatically injects the script
+1. **Request interception:** The `FrameworkResourceHandler` in the `RequestHandlerChain` intercepts `/__juphjacs__/*`
+2. **Framework path resolution:** Resolves the resource path relative to the framework's installation directory
+3. **Content serving:** Serves the file with appropriate content-type headers
+4. **Automatic injection:** For HTML pages without existing hot-reload code, the server automatically injects the script
 
 ## Adding New Framework Resources
 
 To add a new framework resource:
 
 1. Place the file in an appropriate location under `src/infrastructure/`
-2. Update `DevServer.serveFrameworkResource()` if the resource is not in `hotreload/`
+2. Ensure the `FrameworkResourceHandler` resolves it correctly (framework resources are served from `src/infrastructure/hotreload/` by default)
 3. Document the resource in this file
 
 ## Benefits
@@ -66,11 +66,11 @@ To add a new framework resource:
 
 ## Technical Details
 
-**Implementation:** `src/application/WebServer.mjs`
+**Implementation:** `src/infrastructure/http/FrameworkResourceHandler.mjs` and `src/application/WebServer.mjs` (handler chain setup)
 
-**Key Methods:**
-- `handleRequest()` - Intercepts `/__juphjacs__/` requests
-- `serveFrameworkResource()` - Serves files from framework installation
+**Key Components:**
+- `RequestHandlerChain` - Routes requests through handlers
+- `FrameworkResourceHandler` - Serves files from framework installation
 
 **Path Resolution:**
 ```javascript
