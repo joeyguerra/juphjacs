@@ -28,7 +28,7 @@ class SitemapPlugin extends Plugin {
             const link = this.createLinkFromPage(page)
             // published is a date
             // Only include pages with a published date prior than today
-            if (link && (!page.published || new Date(page.published) <= new Date())) {
+            if (page.published && link && (new Date(page.published) <= new Date())) {
                 this.links.add(link)
             }
         }
