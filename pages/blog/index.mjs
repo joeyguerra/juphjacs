@@ -10,6 +10,12 @@ export class BlogIndexPage extends Page {
     }
     
     async get (req, res) {
+        // The BlogPlugin should have populated its posts during build
+        // Use the context to access plugin data
+        const blogPlugin = this.context.getPluginByName('BlogPlugin')
+        if (blogPlugin) {
+            this.posts = blogPlugin.posts
+        }
         await this.render()
         res.setHeader('Content-Type', 'text/html')
         res.end(this.content)

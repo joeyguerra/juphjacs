@@ -89,6 +89,10 @@ class JuphjacWebServer {
         // Initialize site generator
         await this.siteGenerator.initialize()
 
+        // Expose plugin access on context for dynamic pages
+        this.userContext.getPluginByName = (name) => this.pluginManager.getPlugin(name)
+        this.userContext.hasPlugin = (name) => this.pluginManager.hasPlugin(name)
+
         // Initial build
         this.logger.info('Building site...')
         await this.siteGenerator.build()
