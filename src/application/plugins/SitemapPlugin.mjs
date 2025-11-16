@@ -3,7 +3,7 @@ import { Plugin } from './Plugin.mjs'
 import { sep } from 'node:path'
 
 class SitemapEntry {
-    constructor({ title, url, published = new Date() }) {
+    constructor({ title, url, published }) {
         this.title = title
         this.url = url
         this.published = published
