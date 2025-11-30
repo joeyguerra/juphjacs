@@ -1,5 +1,6 @@
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { HotReloadInjector } from './HotReloadInjector.mjs'
 
 class StaticPageHandler {
     constructor(options = {}) {
@@ -39,28 +40,7 @@ class StaticPageHandler {
             const content = await readFile(fullPath, 'utf-8')
             
             // Inject hot-reload script if not already present
-            const hasHotReloader = content.includes('HotReloader') || content.includes('io(\'/hot-reload\')')
-            
-            let modifiedContent = content
-            
-            if (!hasHotReloader) {
-                // Inject hot-reload script with DOM morphing
-                                const hotReloadScript = `
-<script src="/socket.io/socket.io.js"></script>
-<script type="module">
-  import { HotReloader } from '/__juphjacs__/HotReloader.mjs'
-    const socket = io('/hot-reload', {
-        reconnection: true,
-        reconnectionAttempts: Infinity,
-        reconnectionDelay: 500,
-        reconnectionDelayMax: 2000,
-        timeout: 10000
-    })
-  const reloader = new HotReloader(window, socket)
-</script>
-</body>`
-                modifiedContent = content.replace('</body>', hotReloadScript)
-            }
+            const modifiedContent = HotReloadInjector.inject(content)
             
             res.setHeader('Content-Type', 'text/html')
             res.writeHead(200)

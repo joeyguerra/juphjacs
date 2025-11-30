@@ -194,6 +194,9 @@ await test('Server Integration - Dynamic Page Handling', async t => {
             assert.equal(response.status, 200, `Expected 200 but got ${response.status}: ${body.substring(0, 200)}`)
             assert.equal(response.headers.get('content-type'), 'text/html')
             assert.ok(body.includes('Blog'), 'Should contain blog content')
+            // Should have hot-reload injected via TEMPLATE_RENDERED event
+            assert.match(body, /HotReloader/, 'Should have HotReloader script injected')
+            assert.match(body, /socket\.io/, 'Should have socket.io script injected')
         } finally {
             await server.stop()
         }

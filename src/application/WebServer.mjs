@@ -2,6 +2,8 @@ import { ConfigLoader } from './config/ConfigLoader.mjs'
 import { PluginManager } from './plugins/PluginManager.mjs'
 import { SiteGenerator } from './SiteGenerator.mjs'
 import { PageRepository } from '../domain/pages/PageRepository.mjs'
+import { EVENTS as PageEvents } from '../domain/pages/Page.mjs'
+import { HotReloadInjector } from '../infrastructure/http/HotReloadInjector.mjs'
 import { FileWatcher } from '../infrastructure/hotreload/FileWatcher.mjs'
 import { HotReloadSocketServer } from '../infrastructure/hotreload/HotReloadSocketServer.mjs'
 import { HotReloadEvent } from '../infrastructure/hotreload/HotReloadEvent.mjs'
@@ -25,6 +27,13 @@ import { readFile } from 'node:fs/promises'
 
 
 class JuphjacWebServer {
+    /**
+     * @param {Object} config
+     * @param {string} config.rootDir - Root directory for the project
+     * @param {string} config.logLevel - Log level: 'debug', 'info', 'warning', 'error'
+     * @param {Object} config.context - User context passed to page objects
+     * @param {boolean} config.hotReload - Enable hot-reload script injection (default: true)
+     */
     constructor(config = {}) {
         this.config = config
         this.rootDir = config.rootDir || process.cwd()
@@ -49,6 +58,7 @@ class JuphjacWebServer {
         this.fileWatcher = null
         this.siteGenerator = null
         this.handlerChain = null
+        this.hotReloadListener = null
     }
 
     async initialize() {
@@ -92,6 +102,17 @@ class JuphjacWebServer {
         // Expose plugin access on context for dynamic pages
         this.userContext.getPluginByName = (name) => this.pluginManager.getPlugin(name)
         this.userContext.hasPlugin = (name) => this.pluginManager.hasPlugin(name)
+
+        // Set up hot-reload injection listener for dynamic pages (dev mode only)
+        const enableHotReload = this.config.hotReload !== false // default true
+        if (enableHotReload) {
+            this.hotReloadListener = (filePath, page) => {
+                if (page.content && page.contentType === 'text/html') {
+                    page.content = HotReloadInjector.inject(page.content)
+                }
+            }
+            process.on(PageEvents.TEMPLATE_RENDERED, this.hotReloadListener)
+        }
 
         // Initial build
         this.logger.info('Building site...')
@@ -327,6 +348,11 @@ class JuphjacWebServer {
 
     async stop() {
         this.logger.info('Stopping server...')
+
+        if (this.hotReloadListener) {
+            process.off(PageEvents.TEMPLATE_RENDERED, this.hotReloadListener)
+            this.hotReloadListener = null
+        }
 
         if (this.fileWatcher) {
             this.fileWatcher.close()
