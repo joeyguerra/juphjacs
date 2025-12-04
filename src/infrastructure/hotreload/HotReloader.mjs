@@ -189,12 +189,20 @@ class HotReloader {
             return
         }
 
+        // Handle comment nodes
+        if (fromNode.nodeType === Node.COMMENT_NODE) {
+            if (fromNode.nodeValue !== toNode.nodeValue) {
+                fromNode.nodeValue = toNode.nodeValue
+            }
+            return
+        }
+
         // Skip script tags to avoid re-execution
         if (fromNode.nodeName === 'SCRIPT') {
             return
         }
 
-        // Update attributes
+        // Update attributes (only for element nodes)
         this.morphAttributes(fromNode, toNode)
 
         // Preserve input values, selections, and focus
@@ -212,8 +220,14 @@ class HotReloader {
 
     /**
      * Update element attributes to match target
+     * Should only be called with element nodes
      */
     morphAttributes(fromNode, toNode) {
+        // Safety check: only element nodes have attributes
+        if (!fromNode.attributes || !toNode.attributes) {
+            return
+        }
+        
         // Remove old attributes
         const fromAttrs = fromNode.attributes
         for (let i = fromAttrs.length - 1; i >= 0; i--) {
