@@ -2,8 +2,8 @@
 import { Page } from '../../index.mjs'
 
 export class BlogIndexPage extends Page {
-    constructor (pagesFolder, filePath, template, delegate) {
-        super(pagesFolder, filePath, template, delegate)
+    constructor (pagesFolder, filePath, template, context) {
+        super(pagesFolder, filePath, template, context)
         this.title = 'The Blog'
         this.layout = './pages/blog/layout.html'
         this.posts = new Set()
