@@ -74,7 +74,8 @@ class JuphjacWebServer {
             {
                 sourceFolder: siteConfig.sourceFolder,
                 buildFolder: siteConfig.buildFolder,
-                resources: siteConfig.resources || []
+                resources: siteConfig.resources || [],
+                dist: siteConfig.dist || []
             },
             this.pluginManager,
             this.repository

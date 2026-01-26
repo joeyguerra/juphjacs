@@ -42,6 +42,9 @@ class SiteGenerator extends EventEmitter {
             
             // Copy resource folders
             await this.copyResources()
+
+            // Copy dist files and folders
+            await this.copyDistFilesAndFolders()
             
             // Discover and load all pages
             const pages = await this.discoverPages()
@@ -104,6 +107,23 @@ class SiteGenerator extends EventEmitter {
                 if (error.code !== 'ENOENT') {
                     this.emit(EVENTS.ERROR, { resourceFolder, error })
                 }
+            }
+        }
+    }
+
+    async copyDistFilesAndFolders() {
+        if (!this.config.dist) return
+        
+        for (const entry of this.config.dist) {
+            const fromPath = resolve(entry.from)
+            const toPath = resolve(this.config.buildFolder, entry.to)
+            const toDir = dirname(toPath)
+            
+            try {
+                await mkdir(toDir, { recursive: true })
+                await cp(fromPath, toPath, { recursive: true })
+            } catch (error) {
+                this.emit(EVENTS.ERROR, { entry, error })
             }
         }
     }
