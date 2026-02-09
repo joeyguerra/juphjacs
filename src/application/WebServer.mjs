@@ -365,7 +365,16 @@ class JuphjacWebServer {
 
         if (this.httpServer) {
             await new Promise((resolve) => {
-                this.httpServer.close(resolve)
+                const timeout = setTimeout(() => {
+                    this.logger.warn('Forcing server shutdown after timeout...')
+                    this.httpServer.closeAllConnections?.()
+                    resolve()
+                }, 5000)
+
+                this.httpServer.close(() => {
+                    clearTimeout(timeout)
+                    resolve()
+                })
             })
         }
 
