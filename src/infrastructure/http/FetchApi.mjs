@@ -28,7 +28,8 @@ class FetchRequest extends IncomingMessage {
             for await (const chunk of this.body) {
                 chunks.push(chunk)
             }
-            return Buffer.concat(chunks).buffer
+            const buffer = Buffer.concat(chunks)
+            return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
         }
         return null
     }
