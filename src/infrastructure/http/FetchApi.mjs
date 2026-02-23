@@ -6,42 +6,65 @@ class FetchRequest extends IncomingMessage {
     constructor(socket) {
         super(socket)
         this.duplex = 'half'
+        this._rawBodyPromise = null
     }
 
     get body () {
-        return ['GET', 'HEAD'].includes(this.method) ? null : Readable.from(this)
+        const method = (this.method || '').toUpperCase()
+        if (['GET', 'HEAD'].includes(method)) {
+            return null
+        }
+
+        return Readable.from((async function* (request) {
+            const buffer = await request.rawBody()
+            if (buffer.length > 0) {
+                yield buffer
+            }
+        })(this))
+    }
+
+    async rawBody() {
+        const method = (this.method || '').toUpperCase()
+        if (['GET', 'HEAD'].includes(method)) {
+            return Buffer.alloc(0)
+        }
+
+        if (!this._rawBodyPromise) {
+            this._rawBodyPromise = (async () => {
+                const chunks = []
+                for await (const chunk of this) {
+                    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+                }
+                return Buffer.concat(chunks)
+            })()
+        }
+
+        return this._rawBodyPromise
     }
 
     async text() {
         const parser = new RequestBodyParser(this)
-        return await parser.parse()
+        return await parser.parseText()
     }
 
     async json() {
         const parser = new RequestBodyParser(this)
-        return await parser.parse()
+        return await parser.parseJson()
     }
 
     async arrayBuffer() {
-        if (this.body) {
-            const chunks = []
-            for await (const chunk of this.body) {
-                chunks.push(chunk)
-            }
-            const buffer = Buffer.concat(chunks)
-            return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
-        }
-        return null
+        const buffer = await this.rawBody()
+        return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
     }
 
     async blob() {
         const arrayBuffer = await this.arrayBuffer()
-        return arrayBuffer ? new Blob([arrayBuffer]) : null
+        return new Blob([arrayBuffer])
     }
 
     async formData() {
         const parser = new RequestBodyParser(this)
-        return await parser.parse()
+        return await parser.parseFormData()
     }
 }
 

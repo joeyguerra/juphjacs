@@ -16,11 +16,11 @@ await test('Fetch API', async t => {
         })
 
         await new Promise((resolve, reject) => {
-            server.listen(0, 'localhost', resolve)
+            server.listen(0, '127.0.0.1', resolve)
             server.on('error', reject)
         })
         const port = server.address().port
-        const response = await fetch(`http://localhost:${port}`)
+        const response = await fetch(`http://127.0.0.1:${port}`)
 
         await new Promise((resolve, reject) => {
             server.close(resolve)
@@ -42,11 +42,11 @@ await test('Fetch API', async t => {
         })
 
         await new Promise((resolve, reject) => {
-            server.listen(0, 'localhost', resolve)
+            server.listen(0, '127.0.0.1', resolve)
             server.on('error', reject)
         })
         const port = server.address().port
-        const response = await fetch(`http://localhost:${port}`, {
+        const response = await fetch(`http://127.0.0.1:${port}`, {
             headers: {
                 Cookie: 'theme=dark'
             }
@@ -68,21 +68,21 @@ await test('Fetch API', async t => {
         })
         server.on('request', async (req, res) => {
             const formData = await req.formData()
-            const file = formData.files.file
-            res.end(`name: ${file.filename} size: ${file.size} ${await file.text()}`)
+            const file = formData.get('file')
+            res.end(`name: ${file.name} size: ${file.size} ${await file.text()}`)
         })
 
         const port = await new Promise((resolve, reject) => {
             server.on('error', reject)
-            server.listen(0, 'localhost', () => {
-                console.log('Server listening on http://localhost:' + server.address().port)
+            server.listen(0, '127.0.0.1', () => {
+                console.log('Server listening on http://127.0.0.1:' + server.address().port)
                 resolve(server.address().port)
             })
         })
 
         const formData = new FormData()
         formData.append('file', new Blob(['Hello World'], { type: 'text/plain' }), 'hello.txt')
-        const response = await fetch(`http://localhost:${port}/upload`, {
+        const response = await fetch(`http://127.0.0.1:${port}/upload`, {
             method: 'POST',
             body: formData
         })
@@ -95,7 +95,7 @@ await test('Fetch API', async t => {
 
         const text = await response.text()
         assert.match(text, /name: hello.txt/)
-        assert.match(text, /size: 13/)
+        assert.match(text, /size: 11/)
         assert.match(text, /Hello World/)
     })
 
@@ -116,13 +116,13 @@ await test('Fetch API', async t => {
 
         const port = await new Promise((resolve, reject) => {
             server.on('error', reject)
-            server.listen(0, 'localhost', () => {
-                console.log('Server listening on http://localhost:' + server.address().port)
+            server.listen(0, '127.0.0.1', () => {
+                console.log('Server listening on http://127.0.0.1:' + server.address().port)
                 resolve(server.address().port)
             })
         })
         const expected = { hello: 'world' }
-        const response = await fetch(`http://localhost:${port}/json`, {
+        const response = await fetch(`http://127.0.0.1:${port}/json`, {
             method: 'POST',
             body: JSON.stringify({ hello: 'world' }),
             headers: {
@@ -150,13 +150,13 @@ await test('Fetch API', async t => {
 
         const port = await new Promise((resolve, reject) => {
             server.on('error', reject)
-            server.listen(0, 'localhost', () => {
-                console.log('Server listening on http://localhost:' + server.address().port)
+            server.listen(0, '127.0.0.1', () => {
+                console.log('Server listening on http://127.0.0.1:' + server.address().port)
                 resolve(server.address().port)
             })
         })
 
-        const response = await fetch(`http://localhost:${port}/text`, {
+        const response = await fetch(`http://127.0.0.1:${port}/text`, {
             method: 'POST',
             body: 'Hello World',
             headers: {
@@ -179,19 +179,19 @@ await test('Fetch API', async t => {
             ServerResponse: FetchResponse
         })
         server.on('request', async (req, res) => {
-            const url = new URL(req.url, 'http://localhost')
+            const url = new URL(req.url, 'http://127.0.0.1')
             res.end(url.searchParams.toString())
         })
 
         const port = await new Promise((resolve, reject) => {
             server.on('error', reject)
-            server.listen(0, 'localhost', () => {
-                console.log('Server listening on http://localhost:' + server.address().port)
+            server.listen(0, '127.0.0.1', () => {
+                console.log('Server listening on http://127.0.0.1:' + server.address().port)
                 resolve(server.address().port)
             })
         })
 
-        const response = await fetch(`http://localhost:${port}/query?hello=world`)
+        const response = await fetch(`http://127.0.0.1:${port}/query?hello=world`)
         await new Promise((resolve, reject) => {
             server.close(resolve)
         })

@@ -1,49 +1,48 @@
-import { Readable } from 'node:stream'
+function getContentType(headers) {
+    if (!headers) return ''
+    if (typeof headers.get === 'function') return headers.get('content-type') || ''
+    return headers['content-type'] || headers['Content-Type'] || ''
+}
 
 class RequestBodyParser {
     constructor(request) {
         this.request = request
     }
-    
-    async parse() {
-        return new Promise((resolve, reject) => {
-            let body = Buffer.alloc(0)
-            const contentType = this.request.headers['content-type']
 
-            if (!contentType) {
-                return resolve(null)
+    async parseText() {
+        const body = await this.request.rawBody()
+        return body.toString('utf-8')
+    }
+
+    async parseJson() {
+        const text = await this.parseText()
+        return JSON.parse(text)
+    }
+
+    async parseFormData() {
+        const contentType = getContentType(this.request.headers)
+        const formData = new FormData()
+
+        if (!contentType) {
+            return formData
+        }
+
+        if (contentType.includes('application/x-www-form-urlencoded')) {
+            const text = await this.parseText()
+            const params = new URLSearchParams(text)
+            for (const [key, value] of params) {
+                formData.append(key, value)
             }
+            return formData
+        }
 
-            this.request.on('data', (chunk) => {
-                body = Buffer.concat([body, chunk])
-            })
-    
-            this.request.on('end', () => {
-                try {
-                    if (contentType.includes('application/json')) {
-                        return resolve(JSON.parse(body.toString()))
-                    }
-    
-                    if (contentType.includes('application/x-www-form-urlencoded')) {
-                        return resolve(Object.fromEntries(new URLSearchParams(body.toString())))
-                    }
-    
-                    if (contentType.includes('text/plain')) {
-                        return resolve(body.toString())
-                    }
+        if (contentType.includes('multipart/form-data')) {
+            const body = await this.request.rawBody()
+            this.parseMultipart(body, contentType, formData)
+            return formData
+        }
 
-                    if (contentType.includes('multipart/form-data')) {
-                        return resolve(this.parseMultipart(body, contentType))
-                    }
-    
-                    resolve({ raw: body.toString(), message: 'Unsupported Content-Type' })
-                } catch (error) {
-                    reject(new Error('Invalid request body'))
-                }
-            })
-    
-            this.request.on('error', reject)
-        })
+        return formData
     }
 
     splitBuffer(buffer, delimiter) {
@@ -60,60 +59,42 @@ class RequestBodyParser {
         return parts
     }
 
-    parseMultipart(bodyBuffer, contentType) {
-        const boundary = contentType.split('boundary=')[1]
+    parseMultipart(bodyBuffer, contentType, formData) {
+        const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i)
+        const boundary = boundaryMatch?.[1] || boundaryMatch?.[2]
         if (!boundary) {
             throw new Error('Invalid multipart/form-data: missing boundary')
         }
-    
+
         const boundaryBuffer = Buffer.from(`--${boundary}`)
         const parts = this.splitBuffer(bodyBuffer, boundaryBuffer).slice(1, -1)
 
-        const result = { fields: {}, files: {} }
         for (const part of parts) {
-            const [headers, content] = this.splitHeadersAndBody(part)
+            const cleanedPart = this.trimMultipartPart(part)
+            if (cleanedPart.length === 0) {
+                continue
+            }
+
+            const [headers, content] = this.splitHeadersAndBody(cleanedPart)
             const disposition = headers['content-disposition']
             if (!disposition) continue
-            
-            const match = disposition.match(/name="(.+?)"/)
-            
-            if (!match) continue
-            const fieldName = match[1]
-    
-            if (disposition.includes('filename=')) {
-                const filenameMatch = disposition.match(/filename="(.+?)"/)
-                const filename = filenameMatch ? filenameMatch[1] : 'unknown'
-    
-                const contentType = headers['content-type'] || 'application/octet-stream'
-                const fileStream = this.createStreamFromBuffer(content)
-                result.files[fieldName] = {
-                    filename,
-                    mimetype: contentType,
-                    stream: fileStream,
-                    get size () {
-                        return content.length
-                    },
-                    async text() {
-                        const chunks = []
-                        for await (const chunk of fileStream) {
-                            chunks.push(chunk)
-                        }
-                        return Buffer.concat(chunks).toString()
-                    }
-                }
-            } else {
-                result.fields[fieldName] = content.toString().replace(/\r\n$/, '')
-            }
-        }
 
-        return result
-    }
-    
-    createStreamFromBuffer(buffer) {
-        const stream = new Readable()
-        stream.push(buffer)
-        stream.push(null)
-        return stream
+            const fieldNameMatch = disposition.match(/name="([^"]+)"/)
+            if (!fieldNameMatch) continue
+            const fieldName = fieldNameMatch[1]
+            const value = this.removeTrailingCrlf(content)
+
+            const filenameMatch = disposition.match(/filename="([^"]*)"/)
+            if (!filenameMatch) {
+                formData.append(fieldName, value.toString('utf-8'))
+                continue
+            }
+
+            const filename = filenameMatch[1]
+            const partContentType = headers['content-type'] || 'application/octet-stream'
+            const file = new File([value], filename, { type: partContentType })
+            formData.append(fieldName, file)
+        }
     }
 
     splitHeadersAndBody(buffer) {
@@ -135,6 +116,24 @@ class RequestBodyParser {
     
         return [headers, bodyPart]
     }
+
+    trimMultipartPart(buffer) {
+        let part = buffer
+        if (part.length >= 2 && part.subarray(0, 2).equals(Buffer.from('\r\n'))) {
+            part = part.subarray(2)
+        }
+        if (part.length >= 2 && part.subarray(part.length - 2).equals(Buffer.from('\r\n'))) {
+            part = part.subarray(0, part.length - 2)
+        }
+        return part
+    }
+
+    removeTrailingCrlf(buffer) {
+        if (buffer.length >= 2 && buffer.subarray(buffer.length - 2).equals(Buffer.from('\r\n'))) {
+            return buffer.subarray(0, buffer.length - 2)
+        }
+        return buffer
+    }
 }
 
-export { RequestBodyParser }
+export { RequestBodyParser, getContentType }

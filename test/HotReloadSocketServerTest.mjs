@@ -48,7 +48,7 @@ describe('HotReloadSocketServer', () => {
     it('should accept client connections', async () => {
         websocketServer = new HotReloadSocketServer(socketServer)
         
-        await new Promise(resolve => httpServer.listen(0, resolve))
+        await new Promise(resolve => httpServer.listen(0, '127.0.0.1', resolve))
         const port = httpServer.address().port
 
         let connectionCount = 0
@@ -56,7 +56,7 @@ describe('HotReloadSocketServer', () => {
             connectionCount++
         })
 
-        const client = ioClient(`http://localhost:${port}/hot-reload`)
+        const client = ioClient(`http://127.0.0.1:${port}/hot-reload`)
         clients.push(client)
 
         await sleep(60)
@@ -67,14 +67,14 @@ describe('HotReloadSocketServer', () => {
     it('should broadcast reload messages to all clients', async () => {
         websocketServer = new HotReloadSocketServer(socketServer)
         
-        await new Promise(resolve => httpServer.listen(0, resolve))
+        await new Promise(resolve => httpServer.listen(0, '127.0.0.1', resolve))
         const port = httpServer.address().port
 
         const receivedMessages = []
 
         // Connect two clients
-        const client1 = ioClient(`http://localhost:${port}/hot-reload`)
-        const client2 = ioClient(`http://localhost:${port}/hot-reload`)
+        const client1 = ioClient(`http://127.0.0.1:${port}/hot-reload`)
+        const client2 = ioClient(`http://127.0.0.1:${port}/hot-reload`)
         clients.push(client1, client2)
 
         client1.on('reload', (data) => {
@@ -99,12 +99,12 @@ describe('HotReloadSocketServer', () => {
     it('should send file-changed events with content', async () => {
         websocketServer = new HotReloadSocketServer(socketServer)
         
-        await new Promise(resolve => httpServer.listen(0, resolve))
+        await new Promise(resolve => httpServer.listen(0, '127.0.0.1', resolve))
         const port = httpServer.address().port
 
         let receivedData = null
 
-        const client = ioClient(`http://localhost:${port}/hot-reload`)
+        const client = ioClient(`http://127.0.0.1:${port}/hot-reload`)
         clients.push(client)
 
         client.on('file-changed', (data) => {
@@ -131,7 +131,7 @@ describe('HotReloadSocketServer', () => {
     it('should handle client disconnections', async () => {
         websocketServer = new HotReloadSocketServer(socketServer)
         
-        await new Promise(resolve => httpServer.listen(0, resolve))
+        await new Promise(resolve => httpServer.listen(0, '127.0.0.1', resolve))
         const port = httpServer.address().port
 
         let disconnectCount = 0
@@ -139,7 +139,7 @@ describe('HotReloadSocketServer', () => {
             disconnectCount++
         })
 
-        const client = ioClient(`http://localhost:${port}/hot-reload`)
+        const client = ioClient(`http://127.0.0.1:${port}/hot-reload`)
         clients.push(client)
 
         await sleep(60)
@@ -154,18 +154,18 @@ describe('HotReloadSocketServer', () => {
     it('should track connected clients', async () => {
         websocketServer = new HotReloadSocketServer(socketServer)
         
-        await new Promise(resolve => httpServer.listen(0, resolve))
+        await new Promise(resolve => httpServer.listen(0, '127.0.0.1', resolve))
         const port = httpServer.address().port
 
         assert.strictEqual(websocketServer.getClientCount(), 0)
 
-        const client1 = ioClient(`http://localhost:${port}/hot-reload`)
+        const client1 = ioClient(`http://127.0.0.1:${port}/hot-reload`)
         clients.push(client1)
         await sleep(60)
 
         assert.strictEqual(websocketServer.getClientCount(), 1)
 
-        const client2 = ioClient(`http://localhost:${port}/hot-reload`)
+        const client2 = ioClient(`http://127.0.0.1:${port}/hot-reload`)
         clients.push(client2)
         await sleep(60)
 
@@ -180,17 +180,17 @@ describe('HotReloadSocketServer', () => {
     it('should support selective reload by URL pattern', async () => {
         websocketServer = new HotReloadSocketServer(socketServer)
         
-        await new Promise(resolve => httpServer.listen(0, resolve))
+        await new Promise(resolve => httpServer.listen(0, '127.0.0.1', resolve))
         const port = httpServer.address().port
 
         const client1Messages = []
         const client2Messages = []
 
-        const client1 = ioClient(`http://localhost:${port}/hot-reload`, {
-            extraHeaders: { referer: 'http://localhost/blog/post1.html' }
+        const client1 = ioClient(`http://127.0.0.1:${port}/hot-reload`, {
+            extraHeaders: { referer: 'http://127.0.0.1/blog/post1.html' }
         })
-        const client2 = ioClient(`http://localhost:${port}/hot-reload`, {
-            extraHeaders: { referer: 'http://localhost/about.html' }
+        const client2 = ioClient(`http://127.0.0.1:${port}/hot-reload`, {
+            extraHeaders: { referer: 'http://127.0.0.1/about.html' }
         })
         clients.push(client1, client2)
 
@@ -217,7 +217,7 @@ describe('HotReloadSocketServer', () => {
             errors.push(error)
         })
 
-        await new Promise(resolve => httpServer.listen(0, resolve))
+        await new Promise(resolve => httpServer.listen(0, '127.0.0.1', resolve))
 
         // Try to send data before any clients connect - should handle gracefully
         websocketServer.broadcast('reload', { file: 'test.html' })
@@ -231,12 +231,12 @@ describe('HotReloadSocketServer', () => {
     it('should support CSS-only reload', async () => {
         websocketServer = new HotReloadSocketServer(socketServer)
         
-        await new Promise(resolve => httpServer.listen(0, resolve))
+        await new Promise(resolve => httpServer.listen(0, '127.0.0.1', resolve))
         const port = httpServer.address().port
 
         let cssReloadReceived = false
 
-        const client = ioClient(`http://localhost:${port}/hot-reload`)
+        const client = ioClient(`http://127.0.0.1:${port}/hot-reload`)
         clients.push(client)
 
         client.on('css-reload', (data) => {
@@ -254,11 +254,11 @@ describe('HotReloadSocketServer', () => {
     it('should close all connections gracefully', async () => {
         websocketServer = new HotReloadSocketServer(socketServer)
         
-        await new Promise(resolve => httpServer.listen(0, resolve))
+        await new Promise(resolve => httpServer.listen(0, '127.0.0.1', resolve))
         const port = httpServer.address().port
 
-        const client1 = ioClient(`http://localhost:${port}/hot-reload`)
-        const client2 = ioClient(`http://localhost:${port}/hot-reload`)
+        const client1 = ioClient(`http://127.0.0.1:${port}/hot-reload`)
+        const client2 = ioClient(`http://127.0.0.1:${port}/hot-reload`)
         clients.push(client1, client2)
 
         await sleep(60)

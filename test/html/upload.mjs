@@ -10,7 +10,7 @@ class UploadPage extends Page {
     }
     async post (req, res) {
         const formData = await req.formData()
-        this.upload = formData.files.file
+        this.upload = formData.get('file')
         await this.render()
         res.setHeader('Content-Type', 'text/html')
         res.statusCode = 201
