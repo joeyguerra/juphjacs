@@ -62,6 +62,21 @@ export default {
     },
 
     /**
+     * Template security configuration
+     * Generate keys with: npm run template:keys
+     * Generate signed manifest with: npm run template:manifest -- --root ./pages
+     */
+    templateSecurity: {
+        trustedRoots: ['./pages'],
+        signedManifestPath: './.juphjacs/template-manifest.json',
+        publicKeyPath: './.juphjacs/template-public.pem',
+        requireSignedManifest: false,
+        executionTimeoutMs: 250,
+        workerMemoryLimitMb: 64,
+        maxTemplateSizeBytes: 262144
+    },
+
+    /**
      * Plugin configuration
      * Plugins extend juphjacs functionality
      */

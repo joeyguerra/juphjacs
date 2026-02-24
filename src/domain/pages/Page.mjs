@@ -18,11 +18,26 @@ class Page {
         /** @type {AssetType} */
         this.fileType = resolve(filePath).endsWith('.md') ? AssetType.MARKDOWN : AssetType.HTML
         this.template = template
+        this.sourceTemplate = template
+        this.context = context
         this.content = null
         this.contentType = 'text/html'
-        this.renderer = new TemplateEngine()
+        const templateSecurity = this.context?.templateSecurity || {}
+        const trustedRoots = templateSecurity.trustedRoots?.length
+            ? templateSecurity.trustedRoots
+            : [this.pagesFolder]
+        this.renderer = new TemplateEngine({
+            trustedRoots,
+            allowInlineTemplates: false,
+            signedManifestPath: templateSecurity.signedManifestPath,
+            publicKey: templateSecurity.publicKey,
+            publicKeyPath: templateSecurity.publicKeyPath,
+            requireSignedManifest: templateSecurity.requireSignedManifest === true,
+            executionTimeoutMs: templateSecurity.executionTimeoutMs,
+            workerMemoryLimitMb: templateSecurity.workerMemoryLimitMb,
+            maxTemplateSizeBytes: templateSecurity.maxTemplateSizeBytes
+        })
         this.route = new UriToStaticFileRoute(this.filePath.replace(this.pagesFolder, '').replace(/\\/g, '/'), this.filePath)
-        this.context = context
         this.uri = null
         this.layout = null
     }
@@ -33,7 +48,7 @@ class Page {
         const module = await import(filePath.replace(/\.(html|xml)$/, '.mjs'))
         const page = await module.default(this.pagesFolder, filePath, template, this.context)
         Object.assign(page, this)
-        return await this.renderer.render(template, this)
+        return await this.renderer.render(template, this, { templatePath: filePath })
     }
 
     async includeIf(filePath, condition) {
@@ -55,7 +70,11 @@ class Page {
         }, this)
 
         try {
-            this.content = await this.renderer.render(this.template, this)
+            const renderOptions = {
+                templatePath: this.filePath,
+                verificationContent: this.sourceTemplate
+            }
+            this.content = await this.renderer.render(this.template, this, renderOptions)
         } catch (e) {
             throw e
         }
@@ -69,7 +88,20 @@ class Page {
             } catch (e) {
                 // Layout module is optional
             }
-            this.content = await (new TemplateEngine()).render(layoutHtml, { body: this.content, ...layoutModule, ...this })
+            this.content = await (new TemplateEngine({
+                trustedRoots: this.renderer.trustedRoots,
+                allowInlineTemplates: false,
+                signedManifestPath: this.renderer.signedManifestPath,
+                publicKey: this.renderer.publicKey,
+                publicKeyPath: this.renderer.publicKeyPath,
+                requireSignedManifest: this.renderer.requireSignedManifest,
+                executionTimeoutMs: this.renderer.executionTimeoutMs,
+                workerMemoryLimitMb: this.renderer.workerMemoryLimitMb,
+                maxTemplateSizeBytes: this.renderer.maxTemplateSizeBytes
+            })).render(layoutHtml, { body: this.content, ...layoutModule, ...this }, {
+                templatePath: this.layout,
+                verificationContent: layoutHtml
+            })
         }
 
         if (typeof (this.route) === 'string' || this.route instanceof RegExp) {

@@ -178,11 +178,15 @@ class SiteGenerator extends EventEmitter {
                 const stats = await stat(mjsPath)
                 if (!stats.isDirectory()) {
                     const module = await import(`file://${mjsPath}`)
-                    page = await module.default(this.config.sourceFolder, filePath, template, {})
+                    page = await module.default(this.config.sourceFolder, filePath, template, {
+                        templateSecurity: this.config.templateSecurity
+                    })
                 }
             } catch (error) {
                 // No controller, create basic page
-                page = new Page(this.config.sourceFolder, filePath, template, {})
+                page = new Page(this.config.sourceFolder, filePath, template, {
+                    templateSecurity: this.config.templateSecurity
+                })
             }
             
             // Process markdown files
@@ -194,6 +198,7 @@ class SiteGenerator extends EventEmitter {
                 
                 // Update template to rendered HTML
                 page.template = parsed.html
+                page.sourceTemplate = template
             }
             
             // Store in repository

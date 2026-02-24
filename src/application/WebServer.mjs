@@ -75,11 +75,14 @@ class JuphjacWebServer {
                 sourceFolder: siteConfig.sourceFolder,
                 buildFolder: siteConfig.buildFolder,
                 resources: siteConfig.resources || [],
-                dist: siteConfig.dist || []
+                dist: siteConfig.dist || [],
+                templateSecurity: siteConfig.templateSecurity
             },
             this.pluginManager,
             this.repository
         )
+
+        this.userContext.templateSecurity = siteConfig.templateSecurity
 
         // Register plugins from config
         if (siteConfig.plugins && siteConfig.plugins.length > 0) {

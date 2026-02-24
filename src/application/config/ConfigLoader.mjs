@@ -14,6 +14,15 @@ const DEFAULT_CONFIG = {
         port: 3000,
         host: 'localhost'
     },
+    templateSecurity: {
+        trustedRoots: [],
+        signedManifestPath: null,
+        publicKeyPath: null,
+        requireSignedManifest: false,
+        executionTimeoutMs: 250,
+        workerMemoryLimitMb: 64,
+        maxTemplateSizeBytes: 262144
+    },
     plugins: []
 }
 
@@ -59,6 +68,10 @@ class ConfigLoader {
                 ...defaults.server,
                 ...user.server
             },
+            templateSecurity: {
+                ...defaults.templateSecurity,
+                ...user.templateSecurity
+            },
             plugins: user.plugins || defaults.plugins
         }
     }
@@ -78,6 +91,23 @@ class ConfigLoader {
         // Resolve buildFolder to absolute path
         if (config.buildFolder && !isAbsolute(config.buildFolder)) {
             config.buildFolder = resolve(this.rootFolder, config.buildFolder)
+        }
+
+        // Resolve template security paths
+        if (config.templateSecurity?.trustedRoots?.length) {
+            config.templateSecurity.trustedRoots = config.templateSecurity.trustedRoots.map((root) => {
+                return isAbsolute(root) ? root : resolve(this.rootFolder, root)
+            })
+        } else {
+            config.templateSecurity.trustedRoots = [config.sourceFolder]
+        }
+
+        if (config.templateSecurity?.signedManifestPath && !isAbsolute(config.templateSecurity.signedManifestPath)) {
+            config.templateSecurity.signedManifestPath = resolve(this.rootFolder, config.templateSecurity.signedManifestPath)
+        }
+
+        if (config.templateSecurity?.publicKeyPath && !isAbsolute(config.templateSecurity.publicKeyPath)) {
+            config.templateSecurity.publicKeyPath = resolve(this.rootFolder, config.templateSecurity.publicKeyPath)
         }
     }
 }

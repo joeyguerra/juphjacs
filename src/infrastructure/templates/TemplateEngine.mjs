@@ -1,18 +1,45 @@
+import { createHash } from 'node:crypto'
+import { readFile, opendir } from 'node:fs/promises'
+import { extname, isAbsolute, relative, resolve } from 'node:path'
+import { Worker } from 'node:worker_threads'
+import { canonicalizeManifestPayload, verifyTemplateManifestSignature } from './TemplateManifest.mjs'
+
 class TemplateEngine {
-    constructor() {
+    constructor(options = {}) {
         this.scriptTagRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi
+        this.trustedRoots = (options.trustedRoots || []).map((root) => resolve(root))
+        this.allowInlineTemplates = options.allowInlineTemplates === true
+        this.executionTimeoutMs = options.executionTimeoutMs || 250
+        this.workerMemoryLimitMb = options.workerMemoryLimitMb || 64
+        this.maxTemplateSizeBytes = options.maxTemplateSizeBytes || 256 * 1024
+        this.templateHashes = null
+        this.signedManifestPath = options.signedManifestPath ? resolve(options.signedManifestPath) : null
+        this.publicKey = options.publicKey || null
+        this.publicKeyPath = options.publicKeyPath ? resolve(options.publicKeyPath) : null
+        this.requireSignedManifest = options.requireSignedManifest === true
+        this.verifiedManifest = null
+        this.workerScriptUrl = new URL('./TemplateRenderWorker.mjs', import.meta.url)
+        this.allowedTemplateExtensions = new Set(['.html', '.xml', '.md'])
     }
 
-    async render(template, context = {}) {
+    async render(template, context = {}, options = {}) {
+        const templatePath = options.templatePath ? resolve(options.templatePath) : null
+        this.validateTemplateInput(template, templatePath)
+
+        if (templatePath) {
+            await this.verifyTrustedTemplate(templatePath, template, options)
+        }
+
         // First, protect client-side template literals in script tags
         const { protectedTemplate, scriptContents } = this.protectScriptTags(template)
-        
-        // Render the template with server-side context
-        const rendered = await this.renderTemplate(protectedTemplate, context)
-        
+        const payload = this.buildWorkerPayload(protectedTemplate, context)
+
+        // Render the template in an isolated worker
+        const rendered = await this.renderTemplateInWorker(payload, context)
+
         // Restore the script tags with their original content
         const final = this.restoreScriptTags(rendered, scriptContents)
-        
+
         return final
     }
 
@@ -51,16 +78,177 @@ class TemplateEngine {
         return result
     }
 
-    async renderTemplate(template, context) {
+    validateTemplateInput(template, templatePath) {
+        if (!this.allowInlineTemplates && !templatePath) {
+            throw new Error('Inline templates are disabled. A trusted templatePath is required.')
+        }
+
+        if (Buffer.byteLength(template, 'utf-8') > this.maxTemplateSizeBytes) {
+            throw new Error(`Template exceeds max size limit (${this.maxTemplateSizeBytes} bytes)`)
+        }
+    }
+
+    async verifyTrustedTemplate(templatePath, template, options = {}) {
+        if (!this.isTrustedPath(templatePath)) {
+            throw new Error(`Template path is outside trusted roots: ${templatePath}`)
+        }
+
+        const verificationContent = options.verificationContent ?? template
+        const manifest = await this.getVerifiedManifestIfConfigured()
+        if (manifest) {
+            const expectedHash = this.getHashFromManifest(templatePath, manifest)
+            if (!expectedHash) {
+                throw new Error(`Template missing from signed manifest: ${templatePath}`)
+            }
+            const actualHash = this.sha256(verificationContent)
+            if (actualHash !== expectedHash) {
+                throw new Error(`Template hash mismatch for signed manifest entry: ${templatePath}`)
+            }
+            return
+        }
+
+        if (this.requireSignedManifest) {
+            throw new Error('Signed template manifest is required but not configured or invalid')
+        }
+
+        if (!this.templateHashes) {
+            this.templateHashes = await this.preHashTrustedTemplates()
+        }
+
+        const expectedHash = this.templateHashes.get(templatePath)
+        if (!expectedHash) {
+            throw new Error(`Template is not pre-hashed/allowlisted: ${templatePath}`)
+        }
+
+        const actualHash = this.sha256(verificationContent)
+        if (actualHash !== expectedHash) {
+            throw new Error(`Template hash mismatch for trusted template: ${templatePath}`)
+        }
+    }
+
+    async getVerifiedManifestIfConfigured() {
+        if (!this.signedManifestPath && !this.requireSignedManifest) {
+            return null
+        }
+
+        if (this.verifiedManifest) {
+            return this.verifiedManifest
+        }
+
+        if (!this.signedManifestPath) {
+            return null
+        }
+
+        const raw = await readFile(this.signedManifestPath, 'utf-8')
+        const manifest = JSON.parse(raw)
+        const signature = manifest.signature
+        if (!signature) {
+            throw new Error('Signed manifest is missing signature')
+        }
+
+        const payload = {
+            version: manifest.version,
+            hashAlgorithm: manifest.hashAlgorithm,
+            files: manifest.files || {}
+        }
+
+        const publicKey = await this.loadPublicKey()
+        const verified = verifyTemplateManifestSignature(payload, signature, publicKey)
+        if (!verified) {
+            throw new Error('Signed manifest signature verification failed')
+        }
+
+        // Freeze normalized payload after successful signature verification.
+        this.verifiedManifest = {
+            version: payload.version,
+            hashAlgorithm: payload.hashAlgorithm,
+            files: Object.freeze({ ...(payload.files || {}) }),
+            canonical: canonicalizeManifestPayload(payload)
+        }
+        return this.verifiedManifest
+    }
+
+    async loadPublicKey() {
+        if (this.publicKey) {
+            return this.publicKey
+        }
+        if (!this.publicKeyPath) {
+            throw new Error('publicKeyPath/publicKey required for signed manifest verification')
+        }
+        const key = await readFile(this.publicKeyPath, 'utf-8')
+        this.publicKey = key
+        return key
+    }
+
+    getHashFromManifest(templatePath, manifest) {
+        const resolvedPath = resolve(templatePath)
+        for (const root of this.trustedRoots) {
+            const rel = normalizeRelative(root, resolvedPath)
+            if (!rel) {
+                continue
+            }
+            if (manifest.files[rel]) {
+                return manifest.files[rel]
+            }
+        }
+        return null
+    }
+
+    isTrustedPath(filePath) {
+        if (!filePath || this.trustedRoots.length === 0) {
+            return false
+        }
+
+        const resolvedPath = resolve(filePath)
+        return this.trustedRoots.some((root) => {
+            const resolvedRoot = resolve(root)
+            const rel = relative(resolvedRoot, resolvedPath)
+            return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+        })
+    }
+
+    async preHashTrustedTemplates() {
+        const hashes = new Map()
+
+        for (const root of this.trustedRoots) {
+            for await (const filePath of this.readAllFiles(root)) {
+                const ext = extname(filePath).toLowerCase()
+                if (!this.allowedTemplateExtensions.has(ext)) {
+                    continue
+                }
+                const content = await readFile(filePath, 'utf-8')
+                hashes.set(resolve(filePath), this.sha256(content))
+            }
+        }
+
+        return hashes
+    }
+
+    async *readAllFiles(folder) {
+        const dir = await opendir(folder)
+        for await (const dirent of dir) {
+            const entryPath = resolve(folder, dirent.name)
+            if (dirent.isDirectory()) {
+                yield *this.readAllFiles(entryPath)
+                continue
+            }
+            yield entryPath
+        }
+    }
+
+    sha256(content) {
+        return createHash('sha256').update(content).digest('hex')
+    }
+
+    buildWorkerPayload(template, context) {
         // Get all properties and methods from the context, including prototype methods
         const allKeys = new Set()
-        const allValues = []
-        
+
         // Add own properties
         Object.keys(context).forEach(key => {
             allKeys.add(key)
         })
-        
+
         // Add methods from the prototype chain
         let obj = context
         while (obj && obj !== Object.prototype) {
@@ -71,7 +259,7 @@ class TemplateEngine {
             })
             obj = Object.getPrototypeOf(obj)
         }
-        
+
         // Extract variable names from template expressions ${varName}
         // This allows using ?? operator for undefined variables
         const templateVarRegex = /\$\{([a-zA-Z_$][a-zA-Z0-9_$]*)/g
@@ -83,29 +271,140 @@ class TemplateEngine {
                 allKeys.add(varName)
             }
         }
-        
-        // Build the values array in the same order as keys
-        const keys = Array.from(allKeys)
-        keys.forEach(key => {
+
+        const contextValues = {}
+        const serializedFunctions = {}
+        const rpcFunctions = []
+
+        for (const key of allKeys) {
             const value = context[key]
-            // Bind methods to the context
-            allValues.push(typeof value === 'function' ? value.bind(context) : value)
-        })
-        
-        // Wrap template in backticks to make it a template literal
-        const functionBody = `return \`${template}\``
-        
+
+            if (typeof value === 'function') {
+                if (this.shouldUseRpc(key)) {
+                    rpcFunctions.push(key)
+                    continue
+                }
+
+                const serialized = this.serializeFunction(value)
+                if (serialized) {
+                    serializedFunctions[key] = serialized
+                } else {
+                    rpcFunctions.push(key)
+                }
+                continue
+            }
+
+            contextValues[key] = this.toCloneableValue(value)
+        }
+
+        return {
+            template,
+            contextValues,
+            serializedFunctions,
+            rpcFunctions
+        }
+    }
+
+    shouldUseRpc(functionName) {
+        return functionName === 'include' || functionName === 'includeIf'
+    }
+
+    serializeFunction(fn) {
+        const source = fn.toString()
+        if (!source || source.includes('[native code]')) {
+            return null
+        }
+        return source
+    }
+
+    toCloneableValue(value) {
+        if (typeof value === 'undefined') {
+            return undefined
+        }
+
         try {
-            // Create an ASYNC function with the context variables as parameters
-            const AsyncFunction = async function () {}.constructor
-            const renderFunction = new AsyncFunction(...keys, functionBody)
-            
-            // Call the function with the context values and await the result
-            const result = await renderFunction.apply(context, allValues)
-            
-            return result
+            return structuredClone(value)
+        } catch {
+            return null
+        }
+    }
+
+    async renderTemplateInWorker(payload, context) {
+        try {
+            return await new Promise((resolvePromise, rejectPromise) => {
+                const worker = new Worker(this.workerScriptUrl, {
+                    type: 'module',
+                    workerData: payload,
+                    resourceLimits: {
+                        maxOldGenerationSizeMb: this.workerMemoryLimitMb,
+                        maxYoungGenerationSizeMb: 16
+                    }
+                })
+
+                const timeout = setTimeout(async () => {
+                    await worker.terminate()
+                    rejectPromise(new Error(`Template rendering timed out after ${this.executionTimeoutMs}ms`))
+                }, this.executionTimeoutMs)
+
+                const cleanup = () => {
+                    clearTimeout(timeout)
+                    worker.removeAllListeners()
+                }
+
+                worker.on('message', async (message) => {
+                    if (message?.type === 'rpc-request') {
+                        await this.handleRpcRequest(worker, context, message)
+                        return
+                    }
+
+                    if (message?.type === 'result') {
+                        cleanup()
+                        resolvePromise(message.result)
+                        return
+                    }
+
+                    if (message?.type === 'error') {
+                        cleanup()
+                        rejectPromise(new Error(`Template rendering error: ${message.error}`))
+                    }
+                })
+
+                worker.on('error', (error) => {
+                    cleanup()
+                    rejectPromise(error)
+                })
+
+                worker.on('exit', (code) => {
+                    if (code === 0) {
+                        return
+                    }
+                    cleanup()
+                    rejectPromise(new Error(`Template worker exited with code ${code}`))
+                })
+            })
+        } catch (e) {
+            throw e
+        }
+    }
+
+    async handleRpcRequest(worker, context, request) {
+        const { id, name, args } = request
+        const fn = context[name]
+
+        if (typeof fn !== 'function') {
+            worker.postMessage({
+                type: 'rpc-response',
+                id,
+                error: `Unknown context function: ${name}`
+            })
+            return
+        }
+
+        try {
+            const value = await fn.apply(context, args)
+            worker.postMessage({ type: 'rpc-response', id, value })
         } catch (error) {
-            throw new Error(`Template rendering error: ${error.message}`)
+            worker.postMessage({ type: 'rpc-response', id, error: error.message })
         }
     }
 
@@ -122,3 +421,11 @@ class TemplateEngine {
 }
 
 export { TemplateEngine }
+
+function normalizeRelative(root, filePath) {
+    const rel = relative(root, filePath)
+    if (rel.startsWith('..') || isAbsolute(rel)) {
+        return null
+    }
+    return rel.replace(/\\/g, '/')
+}
