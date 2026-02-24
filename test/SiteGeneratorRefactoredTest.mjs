@@ -260,6 +260,33 @@ title: 'Page Title'
             const output = await readFile(join(buildDir, 'bad.html'), 'utf-8')
             assert.ok(output.includes('<h1></h1>'))
         })
+
+        it('should skip oversized template and continue building other pages', async () => {
+            generator.config.templateSecurity = {
+                maxTemplateSizeBytes: 32
+            }
+
+            const oversizedContent = '<html><body>' + 'a'.repeat(200) + '</body></html>'
+            await writeFile(join(sourceDir, 'too-large.html'), oversizedContent)
+            await writeFile(join(sourceDir, 'ok.html'), '<h1>OK</h1>')
+
+            const skipped = []
+            generator.on('page:skipped', (event) => skipped.push(event))
+
+            await generator.build()
+
+            const okOutput = await readFile(join(buildDir, 'ok.html'), 'utf-8')
+            assert.ok(okOutput.includes('<h1>OK</h1>'))
+
+            await assert.rejects(
+                async () => await readFile(join(buildDir, 'too-large.html'), 'utf-8'),
+                /ENOENT/
+            )
+
+            assert.strictEqual(skipped.length, 1)
+            assert.ok(skipped[0].page.includes('too-large.html'))
+            assert.strictEqual(skipped[0].code, 'TEMPLATE_TOO_LARGE')
+        })
     })
 
     describe('incremental builds', () => {

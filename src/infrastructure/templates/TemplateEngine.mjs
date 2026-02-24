@@ -84,7 +84,9 @@ class TemplateEngine {
         }
 
         if (Buffer.byteLength(template, 'utf-8') > this.maxTemplateSizeBytes) {
-            throw new Error(`Template exceeds max size limit (${this.maxTemplateSizeBytes} bytes)`)
+            const error = new Error(`Template exceeds max size limit (${this.maxTemplateSizeBytes} bytes)`)
+            error.code = 'TEMPLATE_TOO_LARGE'
+            throw error
         }
     }
 

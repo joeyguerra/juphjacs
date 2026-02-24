@@ -1,6 +1,6 @@
 import { ConfigLoader } from './config/ConfigLoader.mjs'
 import { PluginManager } from './plugins/PluginManager.mjs'
-import { SiteGenerator } from './SiteGenerator.mjs'
+import { SiteGenerator, EVENTS as SiteGeneratorEvents } from './SiteGenerator.mjs'
 import { PageRepository } from '../domain/pages/PageRepository.mjs'
 import { EVENTS as PageEvents } from '../domain/pages/Page.mjs'
 import { HotReloadInjector } from '../infrastructure/http/HotReloadInjector.mjs'
@@ -81,6 +81,10 @@ class JuphjacWebServer {
             this.pluginManager,
             this.repository
         )
+
+        this.siteGenerator.on(SiteGeneratorEvents.PAGE_SKIPPED, ({ page, reason }) => {
+            this.logger.warn(`Skipped page generation for ${page}: ${reason}`)
+        })
 
         this.userContext.templateSecurity = siteConfig.templateSecurity
 

@@ -9,6 +9,7 @@ const EVENTS = {
     BUILD_START: 'build:start',
     BUILD_COMPLETE: 'build:complete',
     PAGE_PROCESSED: 'page:processed',
+    PAGE_SKIPPED: 'page:skipped',
     ERROR: 'error'
 }
 
@@ -55,8 +56,11 @@ class SiteGenerator extends EventEmitter {
             // Render each page
             for (const page of transformedPages || pages) {
                 await this.pluginManager.executeHook('onPagePreRendered', page)
-                await this.renderPage(page)
-                await this.pluginManager.executeHook('onPageRendered', page)
+                const renderedPage = await this.renderPage(page)
+                if (!renderedPage) {
+                    continue
+                }
+                await this.pluginManager.executeHook('onPageRendered', renderedPage)
             }
             
             // Build complete
@@ -83,10 +87,13 @@ class SiteGenerator extends EventEmitter {
             // Run plugin hooks to ensure context (like blog posts) is available
             await this.pluginManager.executeHook('onContentLoaded', allPages)
             await this.pluginManager.executeHook('onPagePreRendered', page)
-            await this.renderPage(page)
-            await this.pluginManager.executeHook('onPageRendered', page)
+            const renderedPage = await this.renderPage(page)
+            if (!renderedPage) {
+                return null
+            }
+            await this.pluginManager.executeHook('onPageRendered', renderedPage)
             
-            return page
+            return renderedPage
         } catch (error) {
             this.emit(EVENTS.ERROR, { filePath, error })
             throw error
@@ -231,6 +238,14 @@ class SiteGenerator extends EventEmitter {
             
             return page
         } catch (error) {
+            if (error.code === 'TEMPLATE_TOO_LARGE') {
+                this.emit(EVENTS.PAGE_SKIPPED, {
+                    page: page.filePath,
+                    reason: error.message,
+                    code: error.code
+                })
+                return null
+            }
             this.emit(EVENTS.ERROR, { page: page.filePath, error })
             throw error
         }
