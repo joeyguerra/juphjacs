@@ -42,7 +42,7 @@
     "debug": "^4.3.7",
     "js-yaml": "^4.1.0",
     "markdown-it": "^14.1.0",
-    "minimatch": "^10.0.3",
+    "minimatch": "^10.2.2",
     "morphdom": "^2.7.4",
     "socket.io": "^4.8.0"
   },
