@@ -1,5 +1,5 @@
 import { dirname, extname, join, resolve } from 'node:path'
-import { opendir, mkdir, readFile, writeFile, cp, stat } from 'node:fs/promises'
+import { opendir, mkdir, readFile, writeFile, cp, stat, rename, unlink } from 'node:fs/promises'
 import EventEmitter from 'node:events'
 import { Page } from '../domain/pages/Page.mjs'
 import { MarkdownParser } from '../infrastructure/markdown/MarkdownParser.mjs'
@@ -8,6 +8,7 @@ import { TemplateEngine } from '../infrastructure/templates/TemplateEngine.mjs'
 const EVENTS = {
     BUILD_START: 'build:start',
     BUILD_COMPLETE: 'build:complete',
+    BUILD_ERROR: 'build:error',
     PAGE_PROCESSED: 'page:processed',
     PAGE_SKIPPED: 'page:skipped',
     ERROR: 'error'
@@ -72,7 +73,7 @@ class SiteGenerator extends EventEmitter {
             
             this.emit(EVENTS.BUILD_COMPLETE)
         } catch (error) {
-            this.emit(EVENTS.ERROR, error)
+            this.emitBuildError({ stage: 'build', error })
             throw error
         }
     }
@@ -95,8 +96,8 @@ class SiteGenerator extends EventEmitter {
             
             return renderedPage
         } catch (error) {
-            this.emit(EVENTS.ERROR, { filePath, error })
-            throw error
+            this.emitBuildError({ stage: 'build:file', filePath, error })
+            return null
         }
     }
 
@@ -112,7 +113,7 @@ class SiteGenerator extends EventEmitter {
                 await cp(sourcePath, destPath, { recursive: true })
             } catch (error) {
                 if (error.code !== 'ENOENT') {
-                    this.emit(EVENTS.ERROR, { resourceFolder, error })
+                    this.emitBuildError({ stage: 'copy:resource', resourceFolder, error })
                 }
             }
         }
@@ -130,7 +131,7 @@ class SiteGenerator extends EventEmitter {
                 await mkdir(toDir, { recursive: true })
                 await cp(fromPath, toPath, { recursive: true })
             } catch (error) {
-                this.emit(EVENTS.ERROR, { entry, error })
+                this.emitBuildError({ stage: 'copy:dist', entry, error })
             }
         }
     }
@@ -213,7 +214,7 @@ class SiteGenerator extends EventEmitter {
             
             return page
         } catch (error) {
-            this.emit(EVENTS.ERROR, { filePath, error })
+            this.emitBuildError({ stage: 'load:page', filePath, error })
             return null
         }
     }
@@ -231,8 +232,8 @@ class SiteGenerator extends EventEmitter {
             // Ensure output directory exists
             await mkdir(dirname(outputPath), { recursive: true })
             
-            // Write rendered content
-            await writeFile(outputPath, page.content)
+            // Write rendered content atomically to preserve last-known-good output on failure
+            await this.writeFileAtomic(outputPath, page.content)
             
             this.emit(EVENTS.PAGE_PROCESSED, page)
             
@@ -246,8 +247,34 @@ class SiteGenerator extends EventEmitter {
                 })
                 return null
             }
-            this.emit(EVENTS.ERROR, { page: page.filePath, error })
+            this.emitBuildError({ stage: 'render:page', page: page.filePath, error })
+            this.emit(EVENTS.PAGE_SKIPPED, {
+                page: page.filePath,
+                reason: error.message
+            })
+            return null
+        }
+    }
+
+    async writeFileAtomic(outputPath, content) {
+        const tempPath = `${outputPath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+        try {
+            await writeFile(tempPath, content)
+            await rename(tempPath, outputPath)
+        } catch (error) {
+            try {
+                await unlink(tempPath)
+            } catch {
+                // Ignore cleanup errors for temp files.
+            }
             throw error
+        }
+    }
+
+    emitBuildError(payload) {
+        this.emit(EVENTS.BUILD_ERROR, payload)
+        if (this.listenerCount(EVENTS.ERROR) > 0) {
+            this.emit(EVENTS.ERROR, payload)
         }
     }
 }

@@ -11,6 +11,7 @@ class TemplateEngine {
         this.allowInlineTemplates = options.allowInlineTemplates === true
         this.executionTimeoutMs = options.executionTimeoutMs || 250
         this.workerMemoryLimitMb = options.workerMemoryLimitMb || 64
+        this.workerRetryCount = Number.isInteger(options.workerRetryCount) ? options.workerRetryCount : 1
         this.maxTemplateSizeBytes = options.maxTemplateSizeBytes || 256 * 1024
         this.templateHashes = null
         this.signedManifestPath = options.signedManifestPath ? resolve(options.signedManifestPath) : null
@@ -332,61 +333,124 @@ class TemplateEngine {
     }
 
     async renderTemplateInWorker(payload, context) {
-        try {
-            return await new Promise((resolvePromise, rejectPromise) => {
-                const worker = new Worker(this.workerScriptUrl, {
-                    type: 'module',
-                    workerData: payload,
-                    resourceLimits: {
-                        maxOldGenerationSizeMb: this.workerMemoryLimitMb,
-                        maxYoungGenerationSizeMb: 16
-                    }
-                })
+        let attempt = 0
+        let lastError = null
 
-                const timeout = setTimeout(async () => {
-                    await worker.terminate()
-                    rejectPromise(new Error(`Template rendering timed out after ${this.executionTimeoutMs}ms`))
-                }, this.executionTimeoutMs)
-
-                const cleanup = () => {
-                    clearTimeout(timeout)
-                    worker.removeAllListeners()
+        while (attempt <= this.workerRetryCount) {
+            try {
+                return await this.renderTemplateInWorkerAttempt(payload, context)
+            } catch (error) {
+                lastError = error
+                if (!this.isRetryableWorkerFailure(error) || attempt >= this.workerRetryCount) {
+                    throw error
                 }
 
-                worker.on('message', async (message) => {
-                    if (message?.type === 'rpc-request') {
-                        await this.handleRpcRequest(worker, context, message)
-                        return
-                    }
-
-                    if (message?.type === 'result') {
-                        cleanup()
-                        resolvePromise(message.result)
-                        return
-                    }
-
-                    if (message?.type === 'error') {
-                        cleanup()
-                        rejectPromise(new Error(`Template rendering error: ${message.error}`))
-                    }
-                })
-
-                worker.on('error', (error) => {
-                    cleanup()
-                    rejectPromise(error)
-                })
-
-                worker.on('exit', (code) => {
-                    if (code === 0) {
-                        return
-                    }
-                    cleanup()
-                    rejectPromise(new Error(`Template worker exited with code ${code}`))
-                })
-            })
-        } catch (e) {
-            throw e
+                // Brief delay helps avoid racing with rapid edit/write cycles.
+                await new Promise((resolveDelay) => setTimeout(resolveDelay, 25 * (attempt + 1)))
+                attempt++
+            }
         }
+
+        throw lastError || new Error('Template rendering failed after retries')
+    }
+
+    async renderTemplateInWorkerAttempt(payload, context) {
+        return await new Promise((resolvePromise, rejectPromise) => {
+            const worker = new Worker(this.workerScriptUrl, {
+                type: 'module',
+                workerData: payload,
+                resourceLimits: {
+                    maxOldGenerationSizeMb: this.workerMemoryLimitMb,
+                    maxYoungGenerationSizeMb: 16
+                }
+            })
+
+            let settled = false
+            const timeout = setTimeout(async () => {
+                await worker.terminate()
+                const timeoutError = new Error(`Template rendering timed out after ${this.executionTimeoutMs}ms`)
+                timeoutError.code = 'TEMPLATE_WORKER_TIMEOUT'
+                finalizeReject(timeoutError)
+            }, this.executionTimeoutMs)
+
+            const cleanup = () => {
+                clearTimeout(timeout)
+                worker.removeAllListeners()
+            }
+
+            const finalizeResolve = (value) => {
+                if (settled) {
+                    return
+                }
+                settled = true
+                cleanup()
+                resolvePromise(value)
+            }
+
+            const finalizeReject = (error) => {
+                if (settled) {
+                    return
+                }
+                settled = true
+                cleanup()
+                rejectPromise(error)
+            }
+
+            worker.on('message', async (message) => {
+                if (message?.type === 'rpc-request') {
+                    await this.handleRpcRequest(worker, context, message)
+                    return
+                }
+
+                if (message?.type === 'result') {
+                    finalizeResolve(message.result)
+                    return
+                }
+
+                if (message?.type === 'error') {
+                    const renderingError = new Error(`Template rendering error: ${message.error}`)
+                    renderingError.code = 'TEMPLATE_WORKER_RENDER_ERROR'
+                    renderingError.name = message.name || renderingError.name
+                    if (message.stack) {
+                        renderingError.stack = message.stack
+                    }
+                    finalizeReject(renderingError)
+                }
+            })
+
+            worker.on('error', (error) => {
+                const workerError = error instanceof Error ? error : new Error(String(error))
+                workerError.code = workerError.code || 'TEMPLATE_WORKER_ERROR'
+                finalizeReject(workerError)
+            })
+
+            worker.on('exit', (code) => {
+                if (code === 0) {
+                    return
+                }
+                const exitError = new Error(`Template worker exited with code ${code}`)
+                exitError.code = 'TEMPLATE_WORKER_EXIT'
+                exitError.exitCode = code
+                finalizeReject(exitError)
+            })
+        })
+    }
+
+    isRetryableWorkerFailure(error) {
+        if (!error) {
+            return false
+        }
+
+        if (error.code === 'TEMPLATE_WORKER_TIMEOUT' || error.code === 'TEMPLATE_WORKER_RENDER_ERROR') {
+            return false
+        }
+
+        if (error.code === 'ERR_WORKER_OUT_OF_MEMORY' || error.code === 'TEMPLATE_WORKER_EXIT' || error.code === 'TEMPLATE_WORKER_ERROR') {
+            return true
+        }
+
+        const message = error.message || ''
+        return /worker exited with code|out of memory|worker thread/i.test(message)
     }
 
     async handleRpcRequest(worker, context, request) {

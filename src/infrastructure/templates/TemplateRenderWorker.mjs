@@ -3,6 +3,18 @@ import { parentPort, workerData } from 'node:worker_threads'
 const pendingRpc = new Map()
 let rpcId = 0
 
+function serializeError(error) {
+    if (!(error instanceof Error)) {
+        return { message: String(error) }
+    }
+
+    return {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+    }
+}
+
 function normalizeFunctionSource(source) {
     if (/^async\s+[A-Za-z_$][A-Za-z0-9_$]*\s*\(/.test(source)) {
         return source.replace(/^async\s+/, 'async function ')
@@ -104,9 +116,12 @@ try {
     const result = await renderTemplate(workerData)
     parentPort.postMessage({ type: 'result', result })
 } catch (error) {
+    const serializedError = serializeError(error)
     parentPort.postMessage({
         type: 'error',
-        error: error?.message || String(error)
+        error: serializedError.message,
+        name: serializedError.name,
+        stack: serializedError.stack
     })
 } finally {
     parentPort.removeAllListeners('message')

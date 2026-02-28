@@ -17,13 +17,12 @@ import { FrameworkResourceHandler } from '../infrastructure/http/FrameworkResour
 import { StaticPageHandler } from '../infrastructure/http/StaticPageHandler.mjs'
 import { StaticAssetHandler } from '../infrastructure/http/StaticAssetHandler.mjs'
 import { ErrorHandler } from '../infrastructure/http/ErrorHandler.mjs'
-import { join } from 'node:path'
+import { join, dirname, resolve } from 'node:path'
 import { createServer } from 'node:http'
 import { Server as SocketServer } from 'socket.io'
 import pkg from '../../package.json' with { type: 'json' }
-import { fileURLToPath } from 'node:url'
-import { dirname } from 'node:path'
 import { readFile } from 'node:fs/promises'
+import { fileURLToPath as urlFileURLToPath } from 'node:url'
 
 
 class JuphjacWebServer {
@@ -59,6 +58,7 @@ class JuphjacWebServer {
         this.siteGenerator = null
         this.handlerChain = null
         this.hotReloadListener = null
+        this.fileBuildQueue = new Map()
     }
 
     async initialize() {
@@ -84,6 +84,11 @@ class JuphjacWebServer {
 
         this.siteGenerator.on(SiteGeneratorEvents.PAGE_SKIPPED, ({ page, reason }) => {
             this.logger.warn(`Skipped page generation for ${page}: ${reason}`)
+        })
+        this.siteGenerator.on(SiteGeneratorEvents.BUILD_ERROR, (event) => {
+            const { stage, filePath, page, error, resourceFolder } = event || {}
+            const target = filePath || page || resourceFolder || 'unknown'
+            this.logger.error(`Build error at ${stage || 'unknown'} for ${target}: ${error?.message || 'Unknown error'}`)
         })
 
         this.userContext.templateSecurity = siteConfig.templateSecurity
@@ -132,7 +137,7 @@ class JuphjacWebServer {
         
         // Add framework resource handler (highest priority)
         const frameworkResourceHandler = new FrameworkResourceHandler({
-            frameworkRoot: dirname(fileURLToPath(import.meta.url))
+            frameworkRoot: dirname(urlFileURLToPath(import.meta.url))
         })
         this.handlerChain.add(frameworkResourceHandler)
         
@@ -215,16 +220,20 @@ class JuphjacWebServer {
         })
 
         this.fileWatcher.on('change', async ({ filePath, stats }) => {
-            await this.handleFileChange('change', filePath, stats)
+            await this.enqueueFileChange('change', filePath, stats)
         })
 
         this.fileWatcher.on('add', async ({ filePath, stats }) => {
-            await this.handleFileChange('add', filePath, stats)
+            await this.enqueueFileChange('add', filePath, stats)
         })
 
         this.fileWatcher.on('unlink', async ({ filePath }) => {
             this.logger.info(`File deleted: ${filePath}`)
             // Could implement page deletion here
+        })
+
+        this.fileWatcher.on('error', (error) => {
+            this.logger.error(`File watcher error: ${error.message}`)
         })
 
         // Start watching for file changes
@@ -253,87 +262,101 @@ class JuphjacWebServer {
 
         try {
             // Rebuild the changed file
-            await this.siteGenerator.buildFile(filePath)
+            const rebuiltPage = await this.siteGenerator.buildFile(filePath)
+            if (!rebuiltPage) {
+                this.logger.warn(`Rebuild failed for ${filePath}. Keeping last known output.`)
+                this.websocketServer.broadcast('error', {
+                    message: `Rebuild failed for ${filePath}`,
+                    filePath
+                })
+                return
+            }
 
-            // Get the page from repository
-            const page = this.repository.findByFilePath(filePath)
-            if (page) {
-                // Notify connected clients based on HMR strategy
-                const { assetType, hmrStrategy } = this.assetPolicy.getMeta(filePath)
-                this.logger.debug(`Asset type: ${assetType}, HMR strategy: ${hmrStrategy}`)
-                switch (hmrStrategy) {
-                    case HmrStrategy.CSS_ONLY:
-                        // CSS-only reload (targeted to this page's URL)
-                        {
-                            const urlPath = '/' + page.filePath
-                                .replace(this.siteGenerator.config.sourceFolder, '')
-                                .replace(/\\/g, '/')
-                                .replace(/\.md$/i, '.html')
-                            this.websocketServer.broadcastCssReloadToPath(urlPath, { filePath: page.filePath })
-                        }
-                        break
-                    
-                    case HmrStrategy.DOM_MORPH:
-                    case HmrStrategy.FULL_RELOAD:
-                        // For HTML/JS/MD files, send file-changed event with page content
-                        // Client decides whether to morph DOM or full reload based on file type
-                        // Only send serializable page data (no methods/functions)
-                        // Send targeted update to clients on this page's route
-                        const urlPath = page.filePath
+            // Notify connected clients based on HMR strategy
+            const { assetType, hmrStrategy } = this.assetPolicy.getMeta(filePath)
+            this.logger.debug(`Asset type: ${assetType}, HMR strategy: ${hmrStrategy}`)
+            switch (hmrStrategy) {
+                case HmrStrategy.CSS_ONLY:
+                    // CSS-only reload (targeted to this page's URL)
+                    {
+                        const urlPath = '/' + rebuiltPage.filePath
                             .replace(this.siteGenerator.config.sourceFolder, '')
                             .replace(/\\/g, '/')
                             .replace(/\.md$/i, '.html')
+                        this.websocketServer.broadcastCssReloadToPath(urlPath, { filePath: rebuiltPage.filePath })
+                    }
+                    break
+                
+                case HmrStrategy.DOM_MORPH:
+                case HmrStrategy.FULL_RELOAD:
+                    // For HTML/JS/MD files, send file-changed event with page content
+                    const urlPath = rebuiltPage.filePath
+                        .replace(this.siteGenerator.config.sourceFolder, '')
+                        .replace(/\\/g, '/')
+                        .replace(/\.md$/i, '.html')
 
-                        const event = HotReloadEvent.fromPage(urlPath, page, assetType, hmrStrategy)
-                        this.websocketServer.sendFileChangedToPath(urlPath, event)
-                        // Ask plugins which additional pages are affected and rebuild them
-                        try {
-                            const affectedFiles = await this.pluginManager.collectHookResults('onFileChanged', {
-                                filePath,
-                                page,
-                                repository: this.repository,
-                                site: this.siteGenerator.config
-                            })
-                            const uniqueFiles = Array.from(new Set(affectedFiles.filter(Boolean)))
-                            for (const f of uniqueFiles) {
-                                try {
-                                    const affectedPage = await this.siteGenerator.buildFile(f)
-                                    if (!affectedPage) continue
-                                    const meta = this.assetPolicy.getMeta(affectedPage.filePath)
-                                    const affectedUrlPath = affectedPage.filePath
-                                        .replace(this.siteGenerator.config.sourceFolder, '')
-                                        .replace(/\\/g, '/')
-                                        .replace(/\.md$/i, '.html')
-                                    const evt = HotReloadEvent.fromPage(
-                                        affectedUrlPath,
-                                        affectedPage,
-                                        meta.assetType,
-                                        meta.hmrStrategy
-                                    )
-                                    this.websocketServer.sendFileChangedToPath(affectedUrlPath, evt)
-                                } catch (err) {
-                                    this.logger.debug(`Skipping affected rebuild for ${f}: ${err.message}`)
-                                }
+                    {
+                        const reloadEvent = HotReloadEvent.fromPage(urlPath, rebuiltPage, assetType, hmrStrategy)
+                        this.websocketServer.sendFileChangedToPath(urlPath, reloadEvent)
+                    }
+                    // Ask plugins which additional pages are affected and rebuild them
+                    try {
+                        const affectedFiles = await this.pluginManager.collectHookResults('onFileChanged', {
+                            filePath,
+                            page: rebuiltPage,
+                            repository: this.repository,
+                            site: this.siteGenerator.config
+                        })
+                        const uniqueFiles = Array.from(new Set(affectedFiles.filter(Boolean)))
+                        for (const f of uniqueFiles) {
+                            try {
+                                const affectedPage = await this.siteGenerator.buildFile(f)
+                                if (!affectedPage) continue
+                                const meta = this.assetPolicy.getMeta(affectedPage.filePath)
+                                const affectedUrlPath = affectedPage.filePath
+                                    .replace(this.siteGenerator.config.sourceFolder, '')
+                                    .replace(/\\/g, '/')
+                                    .replace(/\.md$/i, '.html')
+                                const evt = HotReloadEvent.fromPage(
+                                    affectedUrlPath,
+                                    affectedPage,
+                                    meta.assetType,
+                                    meta.hmrStrategy
+                                )
+                                this.websocketServer.sendFileChangedToPath(affectedUrlPath, evt)
+                            } catch (err) {
+                                this.logger.debug(`Skipping affected rebuild for ${f}: ${err.message}`)
                             }
-                        } catch (e) {
-                            this.logger.debug(`Plugin affected pages error: ${e.message}`)
                         }
-                        break
-                    
-                    case HmrStrategy.NONE:
-                        // No reload needed for static assets
-                        break
-                }
-                this.logger.info(`✓ Rebuilt and reloaded: ${JSON.stringify(page.route)}`)
-            } else {
-                // No page found, but file was rebuilt - send generic reload
-                this.logger.info(`✓ Rebuilt: ${filePath}`)
-                this.websocketServer.sendFileChanged({ filePath })
+                    } catch (e) {
+                        this.logger.debug(`Plugin affected pages error: ${e.message}`)
+                    }
+                    break
+                
+                case HmrStrategy.NONE:
+                    // No reload needed for static assets
+                    break
             }
+            this.logger.info(`✓ Rebuilt and reloaded: ${JSON.stringify(rebuiltPage.route)}`)
         } catch (error) {
             this.logger.error(`Error rebuilding ${filePath}: ${error.message}`)
             this.websocketServer.broadcast('error', { message: error.message, filePath })
         }
+    }
+
+    async enqueueFileChange(event, filePath, stats) {
+        const queueKey = resolve(filePath)
+        const previous = this.fileBuildQueue.get(queueKey) || Promise.resolve()
+        const current = previous
+            .catch(() => {})
+            .then(() => this.handleFileChange(event, filePath, stats))
+            .finally(() => {
+                if (this.fileBuildQueue.get(queueKey) === current) {
+                    this.fileBuildQueue.delete(queueKey)
+                }
+            })
+        this.fileBuildQueue.set(queueKey, current)
+        return current
     }
 
     async handleRequest(req, res) {
@@ -363,7 +386,7 @@ class JuphjacWebServer {
         }
 
         if (this.fileWatcher) {
-            this.fileWatcher.close()
+            await this.fileWatcher.close()
         }
 
         if (this.websocketServer) {

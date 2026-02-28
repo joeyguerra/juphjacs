@@ -287,6 +287,21 @@ title: 'Page Title'
             assert.ok(skipped[0].page.includes('too-large.html'))
             assert.strictEqual(skipped[0].code, 'TEMPLATE_TOO_LARGE')
         })
+
+        it('should emit build:error and return null for template worker failures', async () => {
+            const badPath = join(sourceDir, 'broken.html')
+            await writeFile(badPath, '<h1>${</h1>')
+
+            const buildErrors = []
+            generator.on('build:error', (event) => buildErrors.push(event))
+
+            const result = await generator.buildFile(badPath)
+
+            assert.strictEqual(result, null)
+            assert.strictEqual(buildErrors.length, 1)
+            assert.strictEqual(buildErrors[0].stage, 'render:page')
+            assert.ok(buildErrors[0].page.endsWith('broken.html'))
+        })
     })
 
     describe('incremental builds', () => {

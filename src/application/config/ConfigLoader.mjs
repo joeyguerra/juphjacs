@@ -21,6 +21,7 @@ const DEFAULT_CONFIG = {
         requireSignedManifest: false,
         executionTimeoutMs: 250,
         workerMemoryLimitMb: 64,
+        workerRetryCount: 1,
         maxTemplateSizeBytes: 262144
     },
     plugins: []
