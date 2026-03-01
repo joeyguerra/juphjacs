@@ -363,6 +363,39 @@ export default async (pagesFolder, filePath, template, context) => {
             assert.strictEqual(rebuiltPages.length, 1)
             assert.ok(rebuiltPages[0].includes('page1.html'))
         })
+
+        it('should rebuild paired template when a controller .mjs changes', async () => {
+            const pageModuleUrl = pathToFileURL(join(process.cwd(), 'src/domain/pages/Page.mjs')).href
+            const controllerV1 = `import { Page } from '${pageModuleUrl}'
+export default async (pagesFolder, filePath, template, context) => {
+    const page = new Page(pagesFolder, filePath, template, context)
+    page.title = 'Controller V1'
+    return page
+}`
+            const controllerV2 = `import { Page } from '${pageModuleUrl}'
+export default async (pagesFolder, filePath, template, context) => {
+    const page = new Page(pagesFolder, filePath, template, context)
+    page.title = 'Controller V2'
+    return page
+}`
+
+            const htmlPath = join(sourceDir, 'controller-page.html')
+            const mjsPath = join(sourceDir, 'controller-page.mjs')
+            await writeFile(htmlPath, '<h1>${title}</h1>')
+            await writeFile(mjsPath, controllerV1)
+
+            await generator.build()
+            let output = await readFile(join(buildDir, 'controller-page.html'), 'utf-8')
+            assert.ok(output.includes('Controller V1'))
+
+            await writeFile(mjsPath, controllerV2)
+            const rebuilt = await generator.buildFile(mjsPath)
+
+            assert.ok(rebuilt)
+            assert.strictEqual(rebuilt.filePath, htmlPath)
+            output = await readFile(join(buildDir, 'controller-page.html'), 'utf-8')
+            assert.ok(output.includes('Controller V2'))
+        })
     })
 
     describe('page discovery', () => {

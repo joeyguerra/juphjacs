@@ -1,6 +1,7 @@
 import { dirname, extname, join, resolve } from 'node:path'
 import { opendir, mkdir, readFile, writeFile, cp, stat, rename, unlink } from 'node:fs/promises'
 import EventEmitter from 'node:events'
+import { pathToFileURL } from 'node:url'
 import { Page } from '../domain/pages/Page.mjs'
 import { MarkdownParser } from '../infrastructure/markdown/MarkdownParser.mjs'
 import { TemplateEngine } from '../infrastructure/templates/TemplateEngine.mjs'
@@ -80,8 +81,13 @@ class SiteGenerator extends EventEmitter {
 
     async buildFile(filePath) {
         try {
-            const page = await this.loadPage(filePath)
-            if (!page) return
+            const buildTargetPath = await this.resolveBuildTargetPath(filePath)
+            if (!buildTargetPath) {
+                return null
+            }
+
+            const page = await this.loadPage(buildTargetPath)
+            if (!page) return null
             // Get all pages from repository for plugin processing
             const allPages = this.repository.all()
             
@@ -99,6 +105,35 @@ class SiteGenerator extends EventEmitter {
             this.emitBuildError({ stage: 'build:file', filePath, error })
             return null
         }
+    }
+
+    async resolveBuildTargetPath(filePath) {
+        const ext = extname(filePath).toLowerCase()
+        const templateExtensions = ['.html', '.xml', '.md']
+
+        if (templateExtensions.includes(ext)) {
+            return filePath
+        }
+
+        if (ext !== '.mjs') {
+            return null
+        }
+
+        const basePath = filePath.slice(0, -ext.length)
+        const candidates = templateExtensions.map((templateExt) => `${basePath}${templateExt}`)
+
+        for (const candidate of candidates) {
+            try {
+                const stats = await stat(candidate)
+                if (!stats.isDirectory()) {
+                    return candidate
+                }
+            } catch {
+                // Candidate template does not exist; continue searching.
+            }
+        }
+
+        return null
     }
 
     async copyResources() {
@@ -185,7 +220,9 @@ class SiteGenerator extends EventEmitter {
             try {
                 const stats = await stat(mjsPath)
                 if (!stats.isDirectory()) {
-                    const module = await import(`file://${mjsPath}`)
+                    const moduleUrl = pathToFileURL(mjsPath)
+                    moduleUrl.searchParams.set('t', `${Math.floor(stats.mtimeMs)}`)
+                    const module = await import(moduleUrl.href)
                     page = await module.default(this.config.sourceFolder, filePath, template, {
                         templateSecurity: this.config.templateSecurity
                     })
