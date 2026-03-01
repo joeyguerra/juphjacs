@@ -1,6 +1,6 @@
 import { UriToStaticFileRoute } from '../../infrastructure/routing/UriToStaticFileRoute.mjs'
 import { readFile } from 'node:fs/promises'
-import { resolve, join } from 'node:path'
+import { resolve, join, isAbsolute } from 'node:path'
 import { TemplateEngine } from '../../infrastructure/templates/TemplateEngine.mjs'
 import { AssetType } from '../../policy/AssetPolicy.mjs'
 
@@ -19,6 +19,7 @@ class Page {
         this.fileType = resolve(filePath).endsWith('.md') ? AssetType.MARKDOWN : AssetType.HTML
         this.template = template
         this.sourceTemplate = template
+        this.sourceTemplatePath = filePath
         this.context = context
         this.content = null
         this.contentType = 'text/html'
@@ -70,9 +71,10 @@ class Page {
         }, this)
 
         try {
+            const sourceTemplatePath = this.resolveTrustedTemplatePath(this.sourceTemplatePath || this.filePath)
             const renderOptions = {
-                templatePath: this.filePath,
-                verificationContent: this.sourceTemplate
+                templatePath: sourceTemplatePath,
+                verificationContent: this.sourceTemplate ?? this.template
             }
             this.content = await this.renderer.render(this.template, this, renderOptions)
         } catch (e) {
@@ -123,6 +125,16 @@ class Page {
             delete context.body
         }
         return context
+    }
+
+    resolveTrustedTemplatePath(templatePath) {
+        if (!templatePath) {
+            return resolve(this.filePath)
+        }
+        if (isAbsolute(templatePath)) {
+            return resolve(templatePath)
+        }
+        return resolve(this.pagesFolder, templatePath)
     }
 }
 

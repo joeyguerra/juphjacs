@@ -6,6 +6,7 @@ import { Plugin } from '../src/application/plugins/Plugin.mjs'
 import { PageRepository } from '../src/domain/pages/PageRepository.mjs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { mkdir, writeFile, rm, readFile } from 'node:fs/promises'
 
 describe('SiteGenerator (Refactored)', () => {
@@ -220,6 +221,38 @@ title: 'Page Title'
             const output = await readFile(join(buildDir, 'page.html'), 'utf-8')
             assert.ok(output.includes('<title>Page Title</title>'))
             assert.ok(output.includes('<h1>Content</h1>'))
+        })
+
+        it('should allow rendering from a different trusted template path', async () => {
+            const pageModuleUrl = pathToFileURL(join(process.cwd(), 'src/domain/pages/Page.mjs')).href
+            const controller = `import { Page } from '${pageModuleUrl}'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+
+export default async (pagesFolder, filePath, template, context) => {
+    const page = new Page(pagesFolder, filePath, template, context)
+    const sharedPath = join(pagesFolder, 'shared-template.html')
+    const sharedTemplate = await readFile(sharedPath, 'utf-8')
+    page.title = 'Shared Title'
+    page.template = sharedTemplate
+    page.sourceTemplate = sharedTemplate
+    page.sourceTemplatePath = sharedPath
+    return page
+}`
+
+            await writeFile(join(sourceDir, 'shared-template.html'), '<h1>${title}</h1><p>Shared body</p>')
+            await writeFile(join(sourceDir, 'alias-route.html'), '<h1>Alias route template</h1>')
+            await writeFile(join(sourceDir, 'alias-route.mjs'), controller)
+
+            const skipped = []
+            generator.on('page:skipped', (event) => skipped.push(event))
+
+            await generator.build()
+
+            const output = await readFile(join(buildDir, 'alias-route.html'), 'utf-8')
+            assert.ok(output.includes('<h1>Shared Title</h1>'))
+            assert.ok(output.includes('<p>Shared body</p>'))
+            assert.strictEqual(skipped.length, 0)
         })
     })
 
