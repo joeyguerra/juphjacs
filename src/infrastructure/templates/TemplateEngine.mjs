@@ -368,7 +368,8 @@ class TemplateEngine {
             let settled = false
             const timeout = setTimeout(async () => {
                 await worker.terminate()
-                const timeoutError = new Error(`Template rendering timed out after ${this.executionTimeoutMs}ms`)
+                const contextInfo = context.templatePath ? ` for template ${context.templatePath}` : ''
+                const timeoutError = new Error(`Template rendering timed out after ${this.executionTimeoutMs}ms ${contextInfo}`)
                 timeoutError.code = 'TEMPLATE_WORKER_TIMEOUT'
                 finalizeReject(timeoutError)
             }, this.executionTimeoutMs)
