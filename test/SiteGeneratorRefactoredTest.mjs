@@ -266,6 +266,22 @@ export default async (pagesFolder, filePath, template, context) => {
             const cssContent = await readFile(join(buildDir, 'css', 'style.css'), 'utf-8')
             assert.strictEqual(cssContent, 'body { color: red; }')
         })
+
+        it('should copy a changed resource file incrementally', async () => {
+            await mkdir(join(sourceDir, 'js'), { recursive: true })
+            const jsPath = join(sourceDir, 'js', 'app.js')
+            await writeFile(jsPath, 'console.log("v1")')
+
+            await generator.build()
+            await writeFile(jsPath, 'console.log("v2")')
+
+            const copied = await generator.copyResourceFile(jsPath)
+
+            assert.ok(copied)
+            assert.strictEqual(copied.relativePath, join('js', 'app.js'))
+            const jsContent = await readFile(join(buildDir, 'js', 'app.js'), 'utf-8')
+            assert.strictEqual(jsContent, 'console.log("v2")')
+        })
     })
 
     describe('error handling', () => {

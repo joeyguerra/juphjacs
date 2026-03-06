@@ -1,4 +1,4 @@
-import { dirname, extname, join, resolve } from 'node:path'
+import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { opendir, mkdir, readFile, writeFile, cp, stat, rename, unlink } from 'node:fs/promises'
 import EventEmitter from 'node:events'
 import { pathToFileURL } from 'node:url'
@@ -103,6 +103,36 @@ class SiteGenerator extends EventEmitter {
             return renderedPage
         } catch (error) {
             this.emitBuildError({ stage: 'build:file', filePath, error })
+            return null
+        }
+    }
+
+    async copyResourceFile(filePath) {
+        const relativePath = relative(this.config.sourceFolder, filePath)
+        if (!relativePath || relativePath.startsWith(`..${sep}`) || relativePath === '..') {
+            return null
+        }
+
+        const resourceFolder = this.config.resources?.find(folder => {
+            return relativePath === folder || relativePath.startsWith(`${folder}${sep}`)
+        })
+        if (!resourceFolder) {
+            return null
+        }
+
+        const destinationPath = join(this.config.buildFolder, relativePath)
+
+        try {
+            await mkdir(dirname(destinationPath), { recursive: true })
+            await cp(filePath, destinationPath)
+            return {
+                filePath,
+                destinationPath,
+                relativePath,
+                resourceFolder
+            }
+        } catch (error) {
+            this.emitBuildError({ stage: 'copy:resource:file', filePath, resourceFolder, error })
             return null
         }
     }

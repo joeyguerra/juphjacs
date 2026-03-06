@@ -261,6 +261,24 @@ class JuphjacWebServer {
         }
 
         try {
+            const { assetType, hmrStrategy } = this.assetPolicy.getMeta(filePath)
+
+            const copiedAsset = await this.siteGenerator.copyResourceFile(filePath)
+            if (copiedAsset) {
+                switch (hmrStrategy) {
+                    case HmrStrategy.CSS_ONLY:
+                        this.websocketServer.broadcastCssReload({ filePath })
+                        break
+                    case HmrStrategy.FULL_RELOAD:
+                        this.websocketServer.broadcast('reload', { filePath, assetType })
+                        break
+                    default:
+                        break
+                }
+                this.logger.info(`✓ Copied asset: ${copiedAsset.relativePath}`)
+                return
+            }
+
             // Rebuild the changed file
             const rebuiltPage = await this.siteGenerator.buildFile(filePath)
             if (!rebuiltPage) {
@@ -273,7 +291,6 @@ class JuphjacWebServer {
             }
 
             // Notify connected clients based on HMR strategy
-            const { assetType, hmrStrategy } = this.assetPolicy.getMeta(filePath)
             this.logger.debug(`Asset type: ${assetType}, HMR strategy: ${hmrStrategy}`)
             switch (hmrStrategy) {
                 case HmrStrategy.CSS_ONLY:
